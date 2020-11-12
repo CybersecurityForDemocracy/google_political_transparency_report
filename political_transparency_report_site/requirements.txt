@@ -1,0 +1,8 @@
+selenium
+youtube_dl
+psycopg2
+records
+webvtt-py
+agate
+python-dotenv
+webdriver-manager
