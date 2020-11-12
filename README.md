@@ -7,7 +7,7 @@ Ads on Google come in four flavors:
  - image ads (from DoubleClick, I *think*)
  - image and text ads  (from DoubleClick, I *think*)
 
-*Data sources*
+## Data sources
 There are three data sources for these ads:
 
  - Google's downloadable "political ads transparency bundle" which contains `creative_stats.csv` which contains Ad IDs and metadata (spending, impressions, durations)
@@ -16,14 +16,14 @@ There are three data sources for these ads:
 
 This data joins up via YouTube video IDs to Ad Observer observations, which are otherwise outside the scope of this document.
 
-*Database stuff*
+## Database stuff
 Each of those data sources has its own table in Postgres.
 
 - creative_stats (creative_stats.csv)
 - google_ad_creatives (scraped Transparency Report website data)
 - youtube_videos (youtube-scraped video data, transcripts etc.)
 
-*Temporal aspects*
+## Temporal aspects
 
 - we should scrape the Transparency Report website data frequently, since that data can disappear.
 - creative_stats should be kept fully up to date; temporal changes in spend/impressions estimates should be checked against archived CSVs
