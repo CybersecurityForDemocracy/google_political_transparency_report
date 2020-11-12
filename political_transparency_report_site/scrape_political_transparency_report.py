@@ -16,7 +16,7 @@ import records
 
 SCRAPE_ONE_ADVERTISER_TO_CSV = False
 
-
+DEBUG = False
 DB = records.Database()
 
 AD_DATA_KEYS = [
@@ -110,7 +110,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
       creative_id = ad_detail_url.split("/")[-1]
       if i == 0:
         print(f"new tranche, first creative id: {creative_id}")
-      print(f"creative_id {creative_id}")
+      if DEBUG: print(f"creative_id {creative_id}")
       if is_video_ad(ad):
         try:
           img_url = ad.find_element_by_tag_name("img").get_attribute("src")
@@ -135,7 +135,11 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
           # image and text ad
           image_url = driver.find_element_by_tag_name("canvas").value_of_css_property("background-url")
           image_urls = None
-          destination = driver.find_element_by_tag_name("a").get_attribute("href")
+          try:
+            destination = driver.find_element_by_tag_name("a").get_attribute("href")
+            # occasionally missing, e.g. https://transparencyreport.google.com/political-ads/advertiser/AR182710451392479232/creative/CR315072959679037440
+          except NoSuchElementException:
+            destination = None
           ad_text   = driver.find_element_by_tag_name("html").text
           ad_type = "image_and_text"
         else:
@@ -154,6 +158,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
         yield {"creative_id": creative_id, "text": ad_text, "error": error, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image"}
       else:
         print(f"unrecognized ad type {creative_id}")
+        # these seem to usuablly be ads that were removed.
         yield {"creative_id": creative_id, "error": True, "ad_type": "unknown"}
       add_class(driver, ad, "alreadyprocessed")
       empty_element(driver, ad) # iframes and stuff take up a lot of memory. we empty out elements once we've processed them. (we empty them out, instead of removing them, because removing them causes weird behavior)
@@ -179,10 +184,11 @@ if __name__ == "__main__":
       for row in scrape_political_transparency_report(advertiser_id, start_date, end_date):
         writer.writerow(row)
   else:
-    advertiser_ids = DB.query("select advertiser_id from advertiser_weekly_spend where week_start_date > now() - interval '3 months' group by advertiser_id order by sum(spend_usd) desc offset 10")
+    advertiser_ids = DB.query("select advertiser_id from advertiser_weekly_spend join (select distinct advertiser_id, 1 as present from creative_stats) q using (advertiser_id) where present is null and week_start_date > now() - interval '3 months' group by advertiser_id order by sum(spend_usd) desc")
 
     for advertiser in advertiser_ids:
       advertiser_id = advertiser["advertiser_id"]
+      print("starting advertiser {}".format(advertiser_id))
       with open(f'data/{advertiser_id}_{start_date}_{end_date}_scrape.csv', 'w') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=AD_DATA_KEYS)
         writer.writeheader()
