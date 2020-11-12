@@ -10,6 +10,8 @@ import os
 load_dotenv()
 import records
 
+from get_transparency_bundle import get_current_bundle, get_zip_file_by_name
+
 
 DB = records.Database()
 
@@ -57,16 +59,18 @@ def parse_impressions_string(impressions):
         return None, None
 
 
-INSERT_QUERY = "INSERT INTO creative_stats ({}) VALUES ({})".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
+INSERT_QUERY = "INSERT INTO creative_stats ({}) VALUES ({}) ON CONFLICT UPDATE".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
 
 def load_creative_stats_to_db(csvfn):
-for row in  agate.Table.from_csv(csvfn):
-    ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
-    ad_data["impressions_min"], ad_data["impressions_max"] = parse_impressions_string(row["Impressions"])
-    ad_data["spend_usd"] = ad_data["spend_usd"] or 0
-    DB.query(INSERT_QUERY, **ad_data)
+    for row in  agate.Table.from_csv(csvfn):
+        ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
+        ad_data["impressions_min"], ad_data["impressions_max"] = parse_impressions_string(row["Impressions"])
+        ad_data["spend_usd"] = ad_data["spend_usd"] or 0
+        DB.query(INSERT_QUERY, **ad_data)
 
 
 if __name__ == "__main__":
-    csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv')
-    load_creative_stats_to_db(csvfn)
+    with get_current_bundle() as bundle:
+        csv = get_zip_file_by_name(bundle, "google-political-ads-creative-stats.csv")
+        csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv')
+        load_creative_stats_to_db(csvfn)
