@@ -55,10 +55,12 @@ KEYS = [
     "subtitle_lang",
     "error",
 ]
-INSERT_QUERY = "INSERT INTO youtube_videos ({}) VALUES ({})".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
+INSERT_QUERY = "INSERT INTO google.youtube_videos ({}) VALUES ({})".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
 
 
-ads = DB.query("select distinct youtube_ad_id from google_ad_creatives left outer join youtube_videos on youtube_videos.id = youtube_ad_id where youtube_ad_id is not null and (youtube_videos.id is null or youtube_videos.error = true)")
+scraped_youtube_video_ads = DB.query("select distinct youtube_ad_id from google.google_ad_creatives left outer join youtube_videos on youtube_videos.id = youtube_ad_id where youtube_ad_id is not null and (youtube_videos.id is null or youtube_videos.error = true)")
+# observed_youtube_video_ads = DB.query("select platformitemid from observations.youtube_ads where paid_for_by is not null")
+ads = scraped_youtube_video_ads # + observed_youtube_video_ads
 with ydl:
     for ad in ads:
         while True:

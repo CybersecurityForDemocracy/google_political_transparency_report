@@ -1,11 +1,15 @@
 # Google Ad Library Data
 
-Ads on Google come in four flavors:
+Ads on Google come in four flavors that Jeremy can detect on Google's political transparency report site:
 
  - YouTube video ads
  - text/search ads 
  - image ads (from DoubleClick, I *think*)
  - image and text ads  (from DoubleClick, I *think*)
+
+Plus:
+
+ - "policy violation" ads (which if we never observed them before they were declared to violate Google policies, we don't know which flavor they belong to).
 
 ## Data sources
 There are three data sources for these ads:
@@ -26,19 +30,12 @@ Each of those data sources has its own table in Postgres.
 ## Temporal aspects
 
 - we should scrape the Transparency Report website data frequently, since that data can disappear.
-- creative_stats should be kept fully up to date; temporal changes in spend/impressions estimates should be checked against archived CSVs
+- creative_stats and advertiser_weekly_spend are synced to the latest copy; each day's copy of advertiser_stats is kept (so you can chart total spend and total ads per day).
 - do YouTube videos change? I dunno. Probably doesn't matter. Maybe the transcripts aren't instant? We'll find out!
 
 
-createdb googleads
-csvgrep -c Advertiser_ID -m AR105500339708362752 google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv > AR105500339708362752.csv
-csvgrep -c Advertiser_ID -m AR488306308034854912 google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv > AR488306308034854912.csv
-(manually lowercase the headers)
-csvsql --db postgresql:///googleads --tables creative_stats --insert AR105500339708362752.csv # needs to parse out min_imps/max_imps
-csvsql --db postgresql:///googleads --tables creative_stats --insert --no-create AR488306308034854912.csv # needs to parse out min_imps/max_imps
-USER=toreardstogentedstallopp PASSWORD=d05011d231e3fe7e86e7d742084b2d2c8f846fb1 ruby from_couchdb.rb
-csvsql --db postgresql:///googleads --tables google_ad_creatives --insert djtfp_youtube_20201105.csv
+## How to deploy this
 
-python get_ad_video_info_from_youtube.py
-csvsql --db postgresql:///googleads --tables youtube_videos --insert trump_ad_video_info.csv
-csvsql --db postgresql:///googleads --tables youtube_videos --insert --no-create trump_ad_video_info.csv
+I haven't figured out how, exactly, since I need to figure out which database it will live on.
+
+SQL tables were created manually.

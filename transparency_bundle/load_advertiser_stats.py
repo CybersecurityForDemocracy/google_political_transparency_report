@@ -21,21 +21,24 @@ KEYS = [
     'total_creatives',
     'spend_usd'
 ]
+EXTRA_KEYS = ['report_date']
 
 
-INSERT_QUERY = "INSERT INTO advertiser_stats ({}) VALUES ({})".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
+INSERT_QUERY = "INSERT INTO google.advertiser_stats ({}) VALUES ({}) ON CONFLICT (advertiser_id) DO UPDATE SET {}".format(', '.join([k for k in KEYS + EXTRA_KEYS]), ', '.join([":" + k for k in KEYS + EXTRA_KEYS]), ', '.join([f"{k} = :{k}" for k in KEYS + EXTRA_KEYS]))
 
-
-csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-advertiser-stats.csv')
-def load_advertiser_stats_to_db():
-for row in  agate.Table.from_csv(csvfn):
-    if not row["Elections"]  or row["Elections"] != 'US-Federal':
-        continue
-    ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
-    ad_data["spend_usd"] = ad_data["spend_usd"] or 0
-    DB.query(INSERT_QUERY, **ad_data)
+def load_advertiser_stats_to_db(csvfn, date):
+    for row in  agate.Table.from_csv(csvfn):
+        if not row["Elections"]  or row["Elections"] != 'US-Federal':
+            continue
+        ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
+        ad_data["spend_usd"] = ad_data["spend_usd"] or 0
+        ad_data["report_date"] = date
+        DB.query(INSERT_QUERY, **ad_data)
 
 
 if __name__ == "__main__":
-    csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv')
-    load_advertiser_stats_to_db(csvfn):
+    # csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv')
+    local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', 'data')
+    with get_current_bundle() as zip_file:
+        bundle_date = get_bundle_date(zip_file)
+        load_advertiser_stats_to_db(TextIOWrapper(BytesIO(get_advertiser_stats_csv(zip_file))), bundle_date)

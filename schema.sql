@@ -1,6 +1,5 @@
-CREATE TABLE public.creative_stats (
+CREATE TABLE google.creative_stats (
     ad_id character varying NOT NULL PRIMARY KEY,
-    ad_url character varying NOT NULL,
     ad_type character varying NOT NULL,
     regions character varying NOT NULL,
     advertiser_id character varying NOT NULL,
@@ -21,40 +20,44 @@ CREATE TABLE public.creative_stats (
     impressions_max numeric
 );
 
-CREATE TABLE public.advertiser_weekly_spend (
+CREATE TABLE google.advertiser_weekly_spend (
     advertiser_id character varying NOT NULL,
     advertiser_name text NOT NULL,
     week_start_date date not null,
     spend_usd integer NOT NULL,
     election_cycle character varying
 );
-ALTER TABLE ONLY advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (advertiser_id,week_start_date);
+ALTER TABLE ONLY google.advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (advertiser_id,week_start_date);
 
 
-CREATE TABLE public.google_ad_creatives (
+CREATE TABLE google.google_ad_creatives (
     advertiser_id character varying NOT NULL,
     creative_id character varying NOT NULL,
     ad_type character varying NOT NULL,
+    policy_violation date,
     error boolean,
     youtube_ad_id character varying,
     ad_text text,
     image_url text,
     image_urls text[],
-    destination text,
-)
+    destination text
+);
+ALTER TABLE ONLY google.google_ad_creatives ADD CONSTRAINT "CREATIVES_ID_PKEY" PRIMARY KEY (creative_id);
 
-CREATE TABLE public.advertiser_stats (
+
+CREATE TABLE google.advertiser_stats (
     advertiser_id character varying NOT NULL PRIMARY KEY,
     advertiser_name text NOT NULL,
     public_ids_list character varying,
     regions character varying NOT NULL,
     elections character varying NOT NULL,
     total_creatives integer NOT NULL,
-    spend_usd integer NOT NULL
+    spend_usd integer NOT NULL,
+    report_date date not null
 );
 
 
-CREATE TABLE public.youtube_videos (
+CREATE TABLE google.youtube_videos (
     id character varying NOT NULL,
     uploader character varying NOT NULL,
     uploader_id character varying NOT NULL,
