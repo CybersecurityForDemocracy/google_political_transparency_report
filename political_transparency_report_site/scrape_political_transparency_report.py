@@ -1,7 +1,7 @@
 import os  
 import csv
 from time import sleep
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 from datetime import date, timedelta, datetime
 
 from selenium import webdriver  
@@ -33,7 +33,7 @@ AD_DATA_KEYS = [
 # we don't ever want to overwrite data
 # so if there's a conflict, the only thing we update is whether there is now an error
 INSERT_QUERY = """
-  INSERT INTO google.google_ad_creatives 
+  INSERT INTO google_ad_creatives 
     (advertiser_id, creative_id, ad_type, error, policy_violation_date, youtube_ad_id, ad_text, image_url, image_urls, destination) 
   VALUES (:advertiser_id, {}) 
   ON CONFLICT (creative_id) 
@@ -46,19 +46,25 @@ TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE = "https://transparencyreport.google.com/p
 CHROME_OPTIONS = Options()  
 CHROME_OPTIONS.add_argument("--headless")  
 
-def is_image_ad(ad):
+def is_image_iframe_ad(ad):
   try:
     ad.find_element_by_tag_name("iframe")
     return True
   except NoSuchElementException:
     return False
-
+def is_image_img_ad(ad):
+  try:
+    ad.find_element_by_tag_name("img")
+    return True
+  except NoSuchElementException:
+    return False
 def is_video_ad(ad):
   try:
     ad.find_element_by_css_selector("figure.video-preview")
     return True
   except NoSuchElementException:
     return False
+
 def is_text_ad(ad):
   try:
     ad.find_element_by_tag_name("text-ad")
@@ -126,7 +132,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
       ad_detail_url = ad.find_element_by_tag_name("a").get_attribute("href")
       creative_id = ad_detail_url.split("/")[-1]
       if i == 0:
-        print(f"new tranche, first creative id: {creative_id}")
+        print(f"new tranche, first creative id: {creative_id}, advertiser: {advertiser_id}")
       if DEBUG: print(f"creative_id {creative_id}")
       if is_video_ad(ad):
         try:
@@ -142,7 +148,18 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
         remove_element(driver, ad_container.find_element_by_css_selector(".ad-icon"))
         text = '\n'.join([div.text for div in ad_container.find_elements_by_css_selector("div")])
         yield {"creative_id": creative_id, "text": text, "ad_type": "text"}
-      elif is_image_ad(ad):
+      elif is_image_img_ad(ad):
+        image_urls = None
+        image_url = ad.find_element_by_tag_name("img").get_attribute("src")
+        destination = ad.find_element_by_tag_name("a").get_attribute("href")
+        parsed_destination = parse_qs(urlparse(url).query)
+        if "adurl" in parsed_destination and len(parsed_destination["adurl"]) >= 1:
+          destination = parsed_destination["adurl"][0]
+        
+        ad_text = None
+        ad_type = "image"
+        yield {"creative_id": creative_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image", "policy_violation_date": None}
+      elif is_image_iframe_ad(ad):
         iframe = driver.find_element_by_tag_name("iframe")
         iframe_url = iframe.get_attribute("src")
         driver.switch_to.frame(iframe)
@@ -166,11 +183,15 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             pass
           image_urls = [urljoin(iframe_url,img.get_attribute("src")) for img in driver.find_elements_by_tag_name("img")]
           image_url = None
-          destination = driver.find_element_by_tag_name("a").get_attribute("href")
+          try:
+            destination = driver.find_element_by_tag_name("a").get_attribute("href")
+          except NoSuchElementException as e:
+            destination = None
+            pass
           ad_text = None
           ad_type = "image"
         driver.switch_to.default_content()
-        yield {"creative_id": creative_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image", "policy_vipolicy_violation_dateolation": None}
+        yield {"creative_id": creative_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image", "policy_violation_date": None}
       elif is_policy_violation(ad):
         yield {"creative_id": creative_id, "error": False, "ad_type": "unknown", "policy_violation_date": date.today() }
       else:
@@ -188,8 +209,30 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
 
 
 def backfill_empty_advertisers(start_date, end_date):
-  """ from an empty database, go get ALL ads from start_date """
-  advertiser_ids = DB.query("select advertiser_id from advertiser_weekly_spend join (select distinct advertiser_id, 1 as present from creative_stats) q using (advertiser_id) where present is null and week_start_date > now() - interval '3 months' group by advertiser_id order by sum(spend_usd) desc")
+  """ from an empty database, go get ALL ads from start_date 
+
+      excluding any advertisers for whom we have a row in google_ad_creatives for every ad in creative_stats
+  """
+
+  # get advertisers active between start date and end date 
+  # advertiser_ids = DB.query("""
+  #   select advertiser_id 
+  #   from advertiser_weekly_spend 
+  #   where week_start_date > :start_date 
+  #   and week_start_date <= :end_date 
+  #   group by advertiser_id 
+  #   order by sum(spend_usd) desc""", **{'start_date': start_date, 'end_date': end_date})
+
+  advertiser_ids = DB.query("""
+      select creative_stats.advertiser_id, count(*) 
+        from creative_stats 
+        left outer join google_ad_creatives on ad_id = creative_id 
+        join (select distinct advertiser_id from advertiser_weekly_spend where week_start_date > :start_date  and week_start_date <= :end_date ) recent_advertisers on recent_advertisers.advertiser_id = creative_stats.advertiser_id
+        where date_range_start > :start_date
+        and google_ad_creatives.creative_id is null 
+        group by creative_stats.advertiser_id 
+        order by count(*) desc;""", start_date=start_date, end_date=end_date)
+
   for advertiser in advertiser_ids:
     advertiser_id = advertiser["advertiser_id"]
     print("starting advertiser {}".format(advertiser_id))
@@ -210,6 +253,14 @@ def scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date):
     for row in scrape_political_transparency_report(advertiser_id, start_date, end_date):
       writer.writerow(row)
 
+def scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date): 
+  for row in scrape_political_transparency_report(advertiser_id, start_date, end_date):
+    ad_data = {k:None for k in AD_DATA_KEYS}
+    ad_data.update(row)
+    ad_data["advertiser_id"] = advertiser_id
+    write_row_to_db(ad_data)
+
+
 def running_update_of_all_advertisers():
   """ 
     on a daily basis, go and get all the ads that ran in the past couple days for each advertiser
@@ -220,9 +271,9 @@ def running_update_of_all_advertisers():
   advertisers = DB.query("""
     select advertiser_id, advertisers_this_week.advertiser_name, date_range_end_max - interval '1 day' one_days_before_max_ad_date from 
       (select advertiser_id, creative_stats.advertiser_name, max(date_range_end) date_range_end_max 
-      from google.creative_stats 
+      from creative_stats 
       group by advertiser_id, creative_stats.advertiser_name) advertisers_this_week
-    join google.advertiser_weekly_spend
+    join advertiser_weekly_spend
       using (advertiser_id)
     where advertiser_weekly_spend.week_start_date = '2020-11-01' -- (select max(week_start_date) from advertiser_weekly_spend)
     order by spend_usd desc
@@ -240,18 +291,26 @@ def running_update_of_all_advertisers():
         ad_data["advertiser_id"] = advertiser_id
         write_row_to_db(ad_data)
 
-SCRAPE_ONE_ADVERTISER_TO_CSV = False
-BACKFILL_EMPTY_ADVERTISERS = False
+SCRAPE_ONE_ADVERTISER_TO_DB = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
+SCRAPE_ONE_ADVERTISER_TO_CSV = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
+BACKFILL_EMPTY_ADVERTISERS = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
 if __name__ == "__main__":
   if SCRAPE_ONE_ADVERTISER_TO_CSV:
-    advertiser_id = "AR99922379781701632"      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
-    start_date = date(2020, 9, 1)
+    advertiser_id = SCRAPE_ONE_ADVERTISER_TO_CSV      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+    start_date = date(2020, 6, 1)
     end_date   = date.today() #date(2020, 9, 1)
     scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date)
-  elif BACKFILL_EMPTY_ADVERTISERS:
-    # advertisers with NOTHING yet (so, backfilling)
-    start_date = date(2020, 9, 1)
+  if SCRAPE_ONE_ADVERTISER_TO_DB:
+    advertiser_id = SCRAPE_ONE_ADVERTISER_TO_DB      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+    start_date = date(2020, 6, 1)
     end_date   = date.today() #date(2020, 9, 1)
+    scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date)
+  elif BACKFILL_EMPTY_ADVERTISERS:
+    print("backfilling empty advertisers")
+    start_date = date(2020, 10, 1)
+    end_date   = date(2020, 11, 4)
+    # start_date = date(2020, 11, 5)
+    # end_date   = date.today() #date(2020, 9, 1)
     backfill_empty_advertisers(start_date, end_date)
   else:
     # on a daily basis
