@@ -6,7 +6,7 @@ script to load from a CSV into SQL db specified as env var DATABASE_URL the week
 import os
 import agate
 from dotenv import load_dotenv
-from io import StringIO
+from io import TextIOWrapper, BytesIO
 
 load_dotenv()
 import records
@@ -21,7 +21,7 @@ KEYS = [
     'spend_usd'
 ]
 
-INSERT_QUERY = "INSERT INTO google.advertiser_weekly_spend ({}) VALUES ({}) ON CONFLICT (advertiser_id, week_start_date)  DO NOTHING".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
+INSERT_QUERY = "INSERT INTO advertiser_weekly_spend ({}) VALUES ({}) ON CONFLICT (advertiser_id, week_start_date)  DO NOTHING".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
 
 def load_advertiser_weekly_spend_to_db(csv_filelike):
     for row in  agate.Table.from_csv(csv_filelike):

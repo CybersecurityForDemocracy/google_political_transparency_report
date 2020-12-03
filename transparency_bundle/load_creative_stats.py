@@ -8,11 +8,12 @@ the goal is to *sync* the DB with the CSV, rather than to maintain diffs. that's
 import agate
 from dotenv import load_dotenv
 import os
+from io import TextIOWrapper, BytesIO
 
 load_dotenv()
 import records
 
-from get_transparency_bundle import get_current_bundle, get_zip_file_by_name
+from get_transparency_bundle import get_current_bundle, get_zip_file_by_name, get_bundle_date, get_creative_stats_csv
 
 
 DB = records.Database()
@@ -22,7 +23,6 @@ KEYS = [
     "ad_type",
     "regions",
     "advertiser_id",
-    "advertiser_name",
     "date_range_start",
     "date_range_end",
     "num_of_days",
@@ -37,6 +37,7 @@ KEYS = [
     "spend_range_max_usd",
     "impressions_min",
     "impressions_max",
+    'report_date'
 ]
 
 NUMBER_ABBREVS = {
@@ -60,7 +61,7 @@ def parse_impressions_string(impressions):
         return None, None
 
 
-INSERT_QUERY = "INSERT INTO google.creative_stats ({}) VALUES ({}) ON CONFLICT (ad_id) DO UPDATE SET {}".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]), ', '.join([f"{k} = :{k}" for k in KEYS]))
+INSERT_QUERY = "INSERT INTO creative_stats ({}) VALUES ({}) ON CONFLICT (ad_id) DO UPDATE SET {}".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]), ', '.join([f"{k} = :{k}" for k in KEYS]))
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -78,19 +79,19 @@ CREATIVE_STATS_COLUMN_TYPES = {'Ad_ID': agate.Text(), 'Ad_URL': agate.Text(), 'A
                     'Spend_Range_Min_USD': agate.Number(), 'Spend_Range_Max_USD': agate.Number(), 'Spend_Range_Min_EUR': agate.Number(), 'Spend_Range_Max_EUR': agate.Number(), 'Spend_Range_Min_INR': agate.Number(), 'Spend_Range_Max_INR': agate.Number(), 'Spend_Range_Min_BGN': agate.Number(), 'Spend_Range_Max_BGN': agate.Number(), 'Spend_Range_Min_HRK': agate.Number(), 'Spend_Range_Max_HRK': agate.Number(), 'Spend_Range_Min_CZK': agate.Number(), 'Spend_Range_Max_CZK': agate.Number(), 'Spend_Range_Min_DKK': agate.Number(), 'Spend_Range_Max_DKK': agate.Number(), 'Spend_Range_Min_HUF': agate.Number(), 'Spend_Range_Max_HUF': agate.Number(), 'Spend_Range_Min_PLN': agate.Number(), 'Spend_Range_Max_PLN': agate.Number(), 'Spend_Range_Min_RON': agate.Number(), 'Spend_Range_Max_RON': agate.Number(), 'Spend_Range_Min_SEK': agate.Number(), 'Spend_Range_Max_SEK': agate.Number(), 'Spend_Range_Min_GBP': agate.Number(), 'Spend_Range_Max_GBP': agate.Number(), 'Spend_Range_Min_NZD': agate.Number(), 'Spend_Range_Max_NZD': agate.Number()}
 
 
-def load_creative_stats_to_db(csvfn):
+def load_creative_stats_to_db(csvfn, report_date):
     for batch in  chunks(agate.Table.from_csv(csvfn, column_types=CREATIVE_STATS_COLUMN_TYPES ), 100):
         ads_data = []
         for row in batch:
             ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
             ad_data["impressions_min"], ad_data["impressions_max"] = parse_impressions_string(row["Impressions"])
             ad_data["spend_usd"] = ad_data["spend_usd"] or 0
+            ad_date["report_date"] = report_date
             ads_data.append(ad_data)
         DB.bulk_query(INSERT_QUERY, ads_data)
 
 
 if __name__ == "__main__":
-    with get_current_bundle() as bundle:
-        csv = get_zip_file_by_name(bundle, "google-political-ads-creative-stats.csv")
-        csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-creative-stats.csv')
-        load_creative_stats_to_db(csvfn)
+    with get_current_bundle() as zip_file:
+        bundle_date = get_bundle_date(zip_file)
+        load_creative_stats_to_db(TextIOWrapper(BytesIO(get_creative_stats_csv(zip_file))), bundle_date)

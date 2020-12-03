@@ -87,6 +87,6 @@ def upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle):
     upload_csv_to_gcs("google-political-ads-advertiser-stats-{}.csv".format(bundle_date), advertiser_stats_csv)
 
 if __name__ == "__main__":
-    local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', 'data')
+    local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', 'data') # TODO: should use a tmpdir.
     with get_current_bundle() as zip_file:
         upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle)

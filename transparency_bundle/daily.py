@@ -19,4 +19,4 @@ if __name__ == "__main__":
         upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle)
         load_advertiser_weekly_spend_to_db(TextIOWrapper(BytesIO(get_advertiser_weekly_spend_csv(zip_file))))
         load_advertiser_stats_to_db(TextIOWrapper(BytesIO(get_advertiser_stats_csv(zip_file))), bundle_date)
-        load_creative_stats_to_db(TextIOWrapper(BytesIO(get_creative_stats_csv(zip_file))))
+        load_creative_stats_to_db(TextIOWrapper(BytesIO(get_creative_stats_csv(zip_file))), bundle_date)
