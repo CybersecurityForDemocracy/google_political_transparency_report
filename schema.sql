@@ -1,9 +1,8 @@
-CREATE TABLE google.creative_stats (
+CREATE TABLE creative_stats (
     ad_id character varying NOT NULL PRIMARY KEY,
     ad_type character varying NOT NULL,
     regions character varying NOT NULL,
     advertiser_id character varying NOT NULL,
-    advertiser_name character varying NOT NULL,
     date_range_start date NOT NULL,
     date_range_end date NOT NULL,
     num_of_days numeric NOT NULL,
@@ -17,24 +16,25 @@ CREATE TABLE google.creative_stats (
     spend_range_min_usd numeric NOT NULL,
     spend_range_max_usd numeric,
     impressions_min numeric NOT NULL,
-    impressions_max numeric
+    impressions_max numeric,
+    report_date date not null;
 );
 
-CREATE TABLE google.advertiser_weekly_spend (
+CREATE TABLE advertiser_weekly_spend (
     advertiser_id character varying NOT NULL,
     advertiser_name text NOT NULL,
     week_start_date date not null,
     spend_usd integer NOT NULL,
     election_cycle character varying
 );
-ALTER TABLE ONLY google.advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (advertiser_id,week_start_date);
+ALTER TABLE ONLY advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (advertiser_id,week_start_date);
 
 
-CREATE TABLE google.google_ad_creatives (
+CREATE TABLE google_ad_creatives (
     advertiser_id character varying NOT NULL,
     creative_id character varying NOT NULL,
     ad_type character varying NOT NULL,
-    policy_violation date,
+    policy_violation_date date,
     error boolean,
     youtube_ad_id character varying,
     ad_text text,
@@ -42,10 +42,11 @@ CREATE TABLE google.google_ad_creatives (
     image_urls text[],
     destination text
 );
-ALTER TABLE ONLY google.google_ad_creatives ADD CONSTRAINT "CREATIVES_ID_PKEY" PRIMARY KEY (creative_id);
+ALTER TABLE ONLY google_ad_creatives ADD CONSTRAINT "CREATIVES_ID_PKEY" PRIMARY KEY (creative_id);
+CREATE INDEX idx_creatives_youtube_ad_id ON google_ad_creatives (youtube_ad_id);
+CREATE INDEX idx_creatives_youtube_ad_id_null ON google_ad_creatives WHERE youtube_ad_id is null;
 
-
-CREATE TABLE google.advertiser_stats (
+CREATE TABLE advertiser_stats (
     advertiser_id character varying NOT NULL PRIMARY KEY,
     advertiser_name text NOT NULL,
     public_ids_list character varying,
@@ -57,39 +58,107 @@ CREATE TABLE google.advertiser_stats (
 );
 
 
-CREATE TABLE google.youtube_videos (
+CREATE TABLE youtube_videos (
     id character varying NOT NULL,
-    uploader character varying NOT NULL,
-    uploader_id character varying NOT NULL,
-    uploader_url character varying NOT NULL,
-    channel_id character varying NOT NULL,
-    channel_url character varying NOT NULL,
-    upload_date numeric NOT NULL,
-    license boolean,
-    creator boolean,
-    title character varying NOT NULL,
-    alt_title boolean,
-    thumbnail character varying NOT NULL,
-    description character varying NOT NULL,
-    categories boolean,
-    tags character varying NOT NULL,
-    duration numeric NOT NULL,
-    age_limit integer NOT NULL,
-    webpage_url character varying NOT NULL,
-    view_count numeric NOT NULL,
-    like_count boolean,
-    dislike_count boolean,
+    uploader character varying,
+    uploader_id character varying,
+    uploader_url character varying,
+    channel_id character varying,
+    channel_url character varying,
+    upload_date numeric,
+    license character varying,
+    creator character varying,
+    title text,
+    alt_title character varying,
+    thumbnail character varying,
+    description character varying,
+    categories text[],
+    tags character varying,
+    duration numeric,
+    age_limit integer,
+    webpage_url character varying,
+    view_count numeric,
+    like_count numeric,
+    dislike_count numeric,
     average_rating numeric,
     is_live boolean,
-    display_id character varying NOT NULL,
-    format character varying NOT NULL,
-    format_id character varying NOT NULL,
-    width numeric NOT NULL,
-    height numeric NOT NULL,
-    resolution boolean,
-    fps numeric NOT NULL,
-    fulltitle boolean,
-    subs character varying,
+    display_id character varying,
+    format character varying,
+    format_id character varying,
+    width numeric,
+    height numeric,
+    resolution character varying,
+    fps numeric,
+    fulltitle character varying,
+    subs text,
     subtitle_lang character varying,
     error boolean NOT NULL
 );
+
+CREATE INDEX idx_fts_youtube_videos ON youtube_videos 
+USING gin((setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, title), 'A') || 
+       setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs), 'B')));
+
+
+
+CREATE SERVER observations 
+ FOREIGN DATA WRAPPER postgres_fdw
+ OPTIONS (dbname 'observations');
+
+
+-- CREATE USER MAPPING for CENSORED
+-- SERVER observations
+-- OPTIONS (user 'CENSORED', password 'CENSORED');
+
+
+CREATE FOREIGN TABLE observed_youtube_ads (
+        id varchar(16),
+        video boolean,
+        time_of_day boolean,
+        general_location  boolean,
+        activity boolean,
+        similarity boolean,
+        age boolean,
+        interests_estimation boolean,
+        general_location_estimation boolean,
+        gender boolean,
+        income_estimation boolean,
+        parental_status_estimation boolean,
+        websites_youve_visited boolean,
+        approximate_location boolean,
+        activity_eg_searches boolean,
+        website_topics boolean,
+        age_estimation boolean,
+        gender_estimation boolean,
+
+        homeownership_status_estimation boolean,
+        company_size_estimation boolean,
+        job_industry_estimation boolean,
+        marital_status_estimation boolean,
+        education_status_estimation boolean,
+        visit_to_advertisers_website_or_app boolean,
+        search_terms boolean,
+
+        title text,
+        paid_for_by text,
+        targeting_on boolean,
+        advertiser text,
+        itemType text,
+        itemId text,
+        platformItemId text,
+        observedAt timestamp,
+        hostVideoId text,
+        hostVideoUrl text,
+        hostVideoChannelId text,
+        hostVideoAuthor text,
+        hostVideoTitle text,
+        creative text,
+        reasons text,
+        lang text
+  )
+SERVER observations
+OPTIONS (schema_name 'observations', table_name 'youtube_ads')
+
+
+
+
