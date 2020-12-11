@@ -6,19 +6,21 @@ from datetime import date, timedelta, datetime
 
 from selenium import webdriver  
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from selenium.webdriver.common.keys import Keys  
-from selenium.webdriver.chrome.options import Options  
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait as wait
 from dotenv import load_dotenv
 
 load_dotenv()
 import records
 
-DEBUG = False
+DEBUG = os.environ.get("DEBUG", False)
 DB = records.Database()
 
 AD_DATA_KEYS = [
-  "creative_id",
+  "ad_id",
   "ad_type",
   "error",
   "policy_violation_date",
@@ -34,9 +36,9 @@ AD_DATA_KEYS = [
 # so if there's a conflict, the only thing we update is whether there is now an error
 INSERT_QUERY = """
   INSERT INTO google_ad_creatives 
-    (advertiser_id, creative_id, ad_type, error, policy_violation_date, youtube_ad_id, ad_text, image_url, image_urls, destination) 
+    (advertiser_id, ad_id, ad_type, error, policy_violation_date, youtube_ad_id, ad_text, image_url, image_urls, destination) 
   VALUES (:advertiser_id, {}) 
-  ON CONFLICT (creative_id) 
+  ON CONFLICT (ad_id) 
   DO UPDATE SET error = :error, policy_violation_date = least(:policy_violation_date, google_ad_creatives.policy_violation_date)""".format( ', '.join([":" + k for k in AD_DATA_KEYS]))
 def write_row_to_db(ad_data):
   DB.query(INSERT_QUERY, **ad_data);
@@ -58,10 +60,19 @@ def is_image_img_ad(ad):
     return True
   except NoSuchElementException:
     return False
-def is_video_ad(ad):
+def is_youtube_video_ad(ad):
   try:
     ad.find_element_by_css_selector("figure.video-preview")
     return True
+  except NoSuchElementException:
+    return False
+def is_other_video_ad(ad):
+  """ some ads, like from https://transparencyreport.google.com/political-ads/advertiser/AR289367614772215808/creative/CR91503350528344064 show up as "unrenderable"
+      on the search results page.
+  """
+  try: 
+    ad.find_element_by_tag_name("unrenderable-ad")
+    return "Video ad" in ad.find_element_by_tag_name("figcaption").text
   except NoSuchElementException:
     return False
 
@@ -83,12 +94,20 @@ def is_image_and_text_ad(driver):
 def is_policy_violation(ad):
   try:
     elem = ad.find_element_by_tag_name("unrenderable-ad")
-    if "Policy violation" in elem.text:
-      return True
-    else: 
-      return False
+    return "Policy violation" in elem.text
   except NoSuchElementException:
     return False
+
+def is_gmail_ad(ad):
+  return False
+
+def is_still_loading(ad):
+  try:
+    ad.find_element_by_tag_name("mat-progress-spinner")
+    return True
+  except NoSuchElementException:
+    return False
+
 
 def remove_element(driver, element):
   driver.execute_script("""
@@ -113,126 +132,148 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
   """
     scrapes to an iterator the content from the Google Political Transparency Report advertiser index pages.
   """
-  driver = webdriver.Chrome(ChromeDriverManager().install(), chrome_options=CHROME_OPTIONS)
+  while True: 
+    try:
+      driver = webdriver.Chrome(ChromeDriverManager().install(), options=CHROME_OPTIONS)
 
-  driver.get(TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE.format(advertiser_id,int(start_date.strftime("%s")) * 1000, int(end_date.strftime("%s")) * 1000))
-  sleep(1)
-
-  while True:
-    start_time = datetime.now()
-    ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
-    print("got {} ads".format(len(ads)))
-    if not ads:
-      sleep(10)
-      ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
-      print("got {} ads (second attempt)".format(len(ads)))
-      if not ads:
-        break
-    for i,ad in enumerate(ads):
-      ad_detail_url = ad.find_element_by_tag_name("a").get_attribute("href")
-      creative_id = ad_detail_url.split("/")[-1]
-      if i == 0:
-        print(f"new tranche, first creative id: {creative_id}, advertiser: {advertiser_id}")
-      if DEBUG: print(f"creative_id {creative_id}")
-      if is_video_ad(ad):
-        try:
-          img_url = ad.find_element_by_tag_name("img").get_attribute("src")
-        except NoSuchElementException:
-          print("no img?")
-          print(ad, ad.get_attribute('innerHTML'))
-          continue
-        youtube_ad_id = img_url.split("/")[4]
-        yield {"creative_id": creative_id, "youtube_ad_id": youtube_ad_id, "ad_type": "video", "policy_violation_date": None}
-      elif is_text_ad(ad):
-        ad_container = ad.find_element_by_tag_name("text-ad")
-        remove_element(driver, ad_container.find_element_by_css_selector(".ad-icon"))
-        text = '\n'.join([div.text for div in ad_container.find_elements_by_css_selector("div")])
-        yield {"creative_id": creative_id, "text": text, "ad_type": "text"}
-      elif is_image_img_ad(ad):
-        image_urls = None
-        image_url = ad.find_element_by_tag_name("img").get_attribute("src")
-        destination = ad.find_element_by_tag_name("a").get_attribute("href")
-        parsed_destination = parse_qs(urlparse(url).query)
-        if "adurl" in parsed_destination and len(parsed_destination["adurl"]) >= 1:
-          destination = parsed_destination["adurl"][0]
-        
-        ad_text = None
-        ad_type = "image"
-        yield {"creative_id": creative_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image", "policy_violation_date": None}
-      elif is_image_iframe_ad(ad):
-        iframe = driver.find_element_by_tag_name("iframe")
-        iframe_url = iframe.get_attribute("src")
-        driver.switch_to.frame(iframe)
-        if is_image_and_text_ad(driver):
-          # image and text ad
-          image_url = driver.find_element_by_tag_name("canvas").value_of_css_property("background-url")
-          image_urls = None
-          try:
-            destination = driver.find_element_by_tag_name("a").get_attribute("href")
-            # occasionally missing, e.g. https://transparencyreport.google.com/political-ads/advertiser/AR182710451392479232/creative/CR315072959679037440
-          except NoSuchElementException:
-            destination = None
-          ad_text   = driver.find_element_by_tag_name("html").text
-          ad_type = "image_and_text"
-        else: # then it's an image ad
-          try:
+      driver.get(TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE.format(advertiser_id,int(start_date.strftime("%s")) * 1000, int(end_date.strftime("%s")) * 1000))
+      sleep(2)
+      while True:
+        start_time = datetime.now()
+        ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
+        print("got {} ads".format(len(ads)))
+        if not ads:
+          sleep(10)
+          ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
+          print("got {} ads (second attempt)".format(len(ads)))
+          if not ads:
+            break
+        for i,ad in enumerate(ads):
+          ad_detail_url = ad.find_element_by_tag_name("a").get_attribute("href")
+          ad_id = ad_detail_url.split("/")[-1]
+          if i == 0:
+            print(f"new tranche, first creative id: {ad_id}, advertiser: {advertiser_id}")
+          if DEBUG: print(f"ad_id {ad_id}")
+          if DEBUG: print(driver.execute_script("return arguments[0].outerHTML;", ad))
+          if is_still_loading(ad):
+            sleep(1)
+          if is_still_loading(ad):
+            sleep(5)
+          if is_youtube_video_ad(ad):
+            try:
+              img_url = ad.find_element_by_tag_name("img").get_attribute("src")
+            except NoSuchElementException:
+              print("no img?")
+              print(ad, ad.get_attribute('innerHTML'))
+              yield {"ad_id": ad_id, "error": True, "ad_type": ad_type}
+            youtube_ad_id = img_url.split("/")[4]
+            ad_type = "video"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "youtube_ad_id": youtube_ad_id, "ad_type": ad_type, "policy_violation_date": None}
+          if is_other_video_ad(ad):
+            ad_type = "video"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "ad_type": ad_type, "error": True, "policy_violation_date": None}
+          elif is_text_ad(ad):
+            ad_container = ad.find_element_by_tag_name("text-ad")
+            remove_element(driver, ad_container.find_element_by_css_selector(".ad-icon"))
+            text = '\n'.join([div.text for div in ad_container.find_elements_by_css_selector("div")])
+            ad_type = "text"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "text": text, "ad_type": ad_type}
+          elif is_image_img_ad(ad):
+            image_urls = None
+            image_url = ad.find_element_by_tag_name("img").get_attribute("src")
+            destination = ad.find_element_by_tag_name("a").get_attribute("href")
+            parsed_destination = parse_qs(urlparse(destination).query)
+            if "adurl" in parsed_destination and len(parsed_destination["adurl"]) >= 1:
+              destination = parsed_destination["adurl"][0]
+            
+            ad_text = None
+            ad_type = "image"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": ad_type, "policy_violation_date": None}
+          elif is_image_iframe_ad(ad):
             iframe = driver.find_element_by_tag_name("iframe")
             iframe_url = iframe.get_attribute("src")
             driver.switch_to.frame(iframe)
-          except NoSuchElementException:
+            if is_image_and_text_ad(driver):
+              # image and text ad
+              image_url = driver.find_element_by_tag_name("canvas").value_of_css_property("background-url")
+              image_urls = None
+              try:
+                destination = driver.find_element_by_tag_name("a").get_attribute("href")
+                # occasionally missing, e.g. https://transparencyreport.google.com/political-ads/advertiser/AR182710451392479232/creative/CR315072959679037440
+              except NoSuchElementException:
+                destination = None
+              ad_text   = driver.find_element_by_tag_name("html").text
+              ad_type = "image_and_text"
+            else: # then it's an image ad
+              try:
+                iframe = driver.find_element_by_tag_name("iframe")
+                iframe_url = iframe.get_attribute("src")
+                driver.switch_to.frame(iframe)
+              except NoSuchElementException:
+                pass
+              image_urls = [urljoin(iframe_url,img.get_attribute("src")) for img in driver.find_elements_by_tag_name("img")]
+              image_url = None
+              try:
+                destination = driver.find_element_by_tag_name("a").get_attribute("href")
+              except NoSuchElementException as e:
+                destination = None
+                pass
+              ad_text = None
+              ad_type = "image"
+            driver.switch_to.default_content()
+            ad_type = "image"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": ad_type, "policy_violation_date": None}
+          elif is_policy_violation(ad):
+            ad_type = "unknown"
+            if DEBUG: print(f"ad type: {ad_type}")
+            yield {"ad_id": ad_id, "error": False, "ad_type": ad_type, "policy_violation_date": date.today() }
+          elif is_gmail_ad(ad):
             pass
-          image_urls = [urljoin(iframe_url,img.get_attribute("src")) for img in driver.find_elements_by_tag_name("img")]
-          image_url = None
-          try:
-            destination = driver.find_element_by_tag_name("a").get_attribute("href")
-          except NoSuchElementException as e:
-            destination = None
-            pass
-          ad_text = None
-          ad_type = "image"
-        driver.switch_to.default_content()
-        yield {"creative_id": creative_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": "image", "policy_violation_date": None}
-      elif is_policy_violation(ad):
-        yield {"creative_id": creative_id, "error": False, "ad_type": "unknown", "policy_violation_date": date.today() }
-      else:
-        print(f"unrecognized ad type {creative_id}")
-        yield {"creative_id": creative_id, "error": True, "ad_type": "unknown", "policy_violation_date": None}
-      add_class(driver, ad, "alreadyprocessed")
-      empty_element(driver, ad) # iframes and stuff take up a lot of memory. we empty out elements once we've processed them. (we empty them out, instead of removing them, because removing them causes weird behavior)
-    print("took: {}".format((datetime.now() - start_time).total_seconds()))
-    try:
-      load_more_btn = driver.find_element_by_tag_name("button.ng-star-inserted")
-      load_more_btn.click()
-      sleep(2)
-    except NoSuchElementException:
-      break
+          else:
+            # sometimes this appears to happen sporadically, like the page isn't done loading yet?
+            print(f"unrecognized ad type {ad_id}")
+            ad_type = "unknown"
+            if DEBUG: print(f"ad type: {ad_type}")
+            print(driver.execute_script("return arguments[0].outerHTML;", ad))
+            yield {"ad_id": ad_id, "error": True, "ad_type": ad_type, "policy_violation_date": None}
+          add_class(driver, ad, "alreadyprocessed")
+          empty_element(driver, ad) # iframes and stuff take up a lot of memory. we empty out elements once we've processed them. (we empty them out, instead of removing them, because removing them causes weird behavior)
+        print("took: {}".format((datetime.now() - start_time).total_seconds()))
+        try:
+          load_more_btn = driver.find_element_by_tag_name("button.ng-star-inserted")
+          load_more_btn.click()
+          sleep(2)
+        except NoSuchElementException:
+          break
+    except WebDriverException:
+      pass # retry
+    else:
+      return # we're done if we didn't get a WebDriverException
 
 
 def backfill_empty_advertisers(start_date, end_date):
   """ from an empty database, go get ALL ads from start_date 
 
       excluding any advertisers for whom we have a row in google_ad_creatives for every ad in creative_stats
+
+      TODO: write about purpose of max_report_date...
   """
-
-  # get advertisers active between start date and end date 
-  # advertiser_ids = DB.query("""
-  #   select advertiser_id 
-  #   from advertiser_weekly_spend 
-  #   where week_start_date > :start_date 
-  #   and week_start_date <= :end_date 
-  #   group by advertiser_id 
-  #   order by sum(spend_usd) desc""", **{'start_date': start_date, 'end_date': end_date})
-
   advertiser_ids = DB.query("""
       select creative_stats.advertiser_id, count(*) 
         from creative_stats 
-        left outer join google_ad_creatives on ad_id = creative_id 
-        join (select distinct advertiser_id from advertiser_weekly_spend where week_start_date > :start_date  and week_start_date <= :end_date ) recent_advertisers on recent_advertisers.advertiser_id = creative_stats.advertiser_id
-        where date_range_start > :start_date
-        and google_ad_creatives.creative_id is null 
+        left outer join google_ad_creatives using (ad_id) 
+        join (select distinct advertiser_id from advertiser_weekly_spend where week_start_date >= :start_date  and week_start_date <= :end_date ) recent_advertisers on recent_advertisers.advertiser_id = creative_stats.advertiser_id
+        where date_range_start >= :start_date
+        and date_range_end <= :end_date
+        and google_ad_creatives.ad_id is null 
+        and creative_stats.report_date = (SELECT max(report_date) FROM creative_stats)
         group by creative_stats.advertiser_id 
         order by count(*) desc;""", start_date=start_date, end_date=end_date)
-
   for advertiser in advertiser_ids:
     advertiser_id = advertiser["advertiser_id"]
     print("starting advertiser {}".format(advertiser_id))
@@ -260,6 +301,9 @@ def scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date):
     ad_data["advertiser_id"] = advertiser_id
     write_row_to_db(ad_data)
 
+def scrape_individual_ad(advertiser_id, creative_id):
+  pass # AR393609425983635456 CR381226726031622144
+
 
 def running_update_of_all_advertisers():
   """ 
@@ -270,14 +314,13 @@ def running_update_of_all_advertisers():
   # then go get all their ads after that date
   advertisers = DB.query("""
     select advertiser_id, advertisers_this_week.advertiser_name, date_range_end_max - interval '1 day' one_days_before_max_ad_date from 
-      (select advertiser_id, creative_stats.advertiser_name, max(date_range_end) date_range_end_max 
+      (select advertiser_id, max(date_range_end) date_range_end_max 
       from creative_stats 
-      group by advertiser_id, creative_stats.advertiser_name) advertisers_this_week
+      group by advertiser_id) advertisers_this_week
     join advertiser_weekly_spend
       using (advertiser_id)
     where advertiser_weekly_spend.week_start_date = '2020-11-01' -- (select max(week_start_date) from advertiser_weekly_spend)
     order by spend_usd desc
-    limit 100
   """)
   end_date   = date.today() #date(2020, 9, 1)
   for advertiser in advertisers:
@@ -302,15 +345,17 @@ if __name__ == "__main__":
     scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date)
   if SCRAPE_ONE_ADVERTISER_TO_DB:
     advertiser_id = SCRAPE_ONE_ADVERTISER_TO_DB      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
-    start_date = date(2020, 6, 1)
-    end_date   = date.today() #date(2020, 9, 1)
+    start_date = date(2020, 5 , 1)
+    end_date = date(2020, 9, 2)
     scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date)
   elif BACKFILL_EMPTY_ADVERTISERS:
     print("backfilling empty advertisers")
-    start_date = date(2020, 10, 1)
-    end_date   = date(2020, 11, 4)
-    # start_date = date(2020, 11, 5)
-    # end_date   = date.today() #date(2020, 9, 1)
+    # start_date = date(2020, 5, 1)
+    # end_date = date(2020, 9, 2)
+    # start_date = date(2020, 9, 1)
+    # end_date = date(2020, 10, 1)
+    start_date = date(2020, 1, 1)
+    end_date = date.today()
     backfill_empty_advertisers(start_date, end_date)
   else:
     # on a daily basis
