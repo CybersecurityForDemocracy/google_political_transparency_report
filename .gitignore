@@ -1,3 +1,4 @@
 data/*
 *.pyc
 .env
+youtube_dot_com/clean_up_subs.py

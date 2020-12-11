@@ -3,9 +3,14 @@
 Ads on Google come in four flavors that Jeremy can detect on Google's political transparency report site:
 
  - YouTube video ads
+ - other video ads, for which no data is available on the search results page (but on the creative detail page, it is available).
  - text/search ads 
- - image ads (from DoubleClick, I *think*)
- - image and text ads  (from DoubleClick, I *think*)
+ - image ads (not iframed)
+ - image ads (from DoubleClick, I *think*; iframed)
+ - image and text ads  (from DoubleClick, I *think*; iframed) (some of which are app install ads)
+ - Gmail ads (which I haven't seen any examples of in 2020.)
+ - completely blank ads, which is a real puzzle (/political-ads/advertiser/AR378575459899670528/creative/CR274967860739047424)
+ - odd broken image ad https://transparencyreport.google.com/political-ads/advertiser/AR204534863850635264/creative/CR454352701774364672
 
 Plus:
 
@@ -35,7 +40,7 @@ Each of those data sources has its own table in Postgres.
 
 ## Outstanding Problems:
 
-Some ads appear in the creative-stats sheet some days, then later disappear. Presumably ads that were taken down for being political, then put back up on appeal.
+1. Some ads appear in the creative-stats sheet some days, then later disappear. Presumably ads that were taken down for being political, then put back up on appeal.
 
 e.g.
 
@@ -57,7 +62,10 @@ select creative_stats.advertiser_id, creative_stats.advertiser_name, count(*) cr
  AR120847323008860160 | CONSERVATIVE BUZZ LLC  |                                   1 | {CR441281226507026432}
  AR24814465610416128  | BEACHSIDE MEDIA INC    |                                   1 | {CR214785129720053760}
 ```
+2. We don't collect any data about "other video" ads (most of the ads where ad_type = 'video' and error is true.) We should get these eventually from the creative pages (because no information is presented on the search result pages.)
 
+
+3. the youtube scraper (for transcripts and video metadata) is currently turned off because we get ratelimited.
 
 ## How to deploy this
 
@@ -65,7 +73,7 @@ select creative_stats.advertiser_id, creative_stats.advertiser_name, count(*) cr
 
 SQL tables were created manually.
 
-## Searching
+## Searching and handy queries
 
 search all ad video texts
 
@@ -90,4 +98,26 @@ will find ads whose subs or title contain "Biden" but which don't appear to have
     where google_ad_creatives.youtube_ad_id is null 
       and paid_for_by = '' 
       and setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, youtube_videos.title), 'A') || setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs), 'B') @@ plainto_tsquery('biden');
+```
+
+YouTube ads seen by the collector for which we've scraped video info:
+
+```select sum(CASE WHEN subs_not_null THEN 1 ELSE 0 END), count(*) as total from (select distinct youtube_videos.id, subs is not null subs_not_null from youtube_videos join observed_youtube_ads on  youtube_videos.id = platformItemId where itemtype != 'recommendedVideo') q;```
+
+on 12/9/2020:
+```
+  sum  | total 
+-------+-------
+ 12757 | 39533
+ ```
+
+YouTube ads from the political ad reports for which we've scraped video info:
+
+```select sum(CASE WHEN subs_not_null THEN 1 ELSE 0 END), count(*) as total from (select distinct youtube_videos.id, subs is not null subs_not_null from youtube_videos join google_ad_creatives on youtube_videos.id = youtube_ad_id) q;```
+
+on 12/9/2020
+```
+  sum  | total 
+-------+-------
+ 13022 | 20394
 ```
