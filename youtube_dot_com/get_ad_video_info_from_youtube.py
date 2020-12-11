@@ -81,14 +81,12 @@ observed_youtube_video_ads = []
 #     on youtube_videos.id = observed_ad_videos.platformitemid 
 #     and (youtube_videos.id is null or youtube_videos.error = true)
 #     """)
-
-# interim_observed_youtube_ads was a CSV dumped from /observations and loaded to /googleads
 observed_youtube_video_ads = DB.query("""
     select platformitemid as youtube_ad_id
-    from interim_observed_youtube_ads
+    from observed_youtube_ads
     left outer join youtube_videos 
-    on youtube_videos.id = interim_observed_youtube_ads.platformitemid 
-    where (youtube_videos.id is null or youtube_videos.error = true)
+    on youtube_videos.id = observed_youtube_ads.platformitemid 
+    where (youtube_videos.id is null or youtube_videos.error = true) and itemtype != 'recommendedVideo'
     """)
 
 ad_collections = [scraped_youtube_video_ads, observed_youtube_video_ads]
@@ -97,6 +95,8 @@ with ydl:
     for ad_collection in ad_collections:
         for ad in ad_collection:
             retried = False
+            if not ad.youtube_ad_id:
+                continue
             while True:
                 try:
                     video = ydl.extract_info(
@@ -109,6 +109,7 @@ with ydl:
                         break
                     else:
                         if 'HTTP Error 429' in repr(e):
+                            print('429, sleeping 2m')
                             sleep(120)
                         else:
                             sleep(5)
@@ -127,10 +128,10 @@ with ydl:
                     subtitle_lang = None
 
                 if subtitle_data:
-                    subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data))]
+                    subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data)) if caption.text.strip() != '']
                     subtitle_lines_deduped = [subtitle_lines[0]]
                     for line_a, line_b in zip(subtitle_lines[:-1], subtitle_lines[1:]):
-                        if line_a != line_b:
+                        if line_a not in line_b:
                             subtitle_lines_deduped.append(line_b)
                     subs = '\n'.join(subtitle_lines_deduped)
                 else:
