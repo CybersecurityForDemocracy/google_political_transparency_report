@@ -17,7 +17,7 @@ CREATE TABLE creative_stats (
     spend_range_max_usd numeric,
     impressions_min numeric NOT NULL,
     impressions_max numeric,
-    report_date date not null;
+    report_date date;
 );
 
 CREATE TABLE advertiser_weekly_spend (
@@ -32,7 +32,7 @@ ALTER TABLE ONLY advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (a
 
 CREATE TABLE google_ad_creatives (
     advertiser_id character varying NOT NULL,
-    creative_id character varying NOT NULL,
+    ad_id character varying NOT NULL,
     ad_type character varying NOT NULL,
     policy_violation_date date,
     error boolean,
@@ -42,7 +42,7 @@ CREATE TABLE google_ad_creatives (
     image_urls text[],
     destination text
 );
-ALTER TABLE ONLY google_ad_creatives ADD CONSTRAINT "CREATIVES_ID_PKEY" PRIMARY KEY (creative_id);
+ALTER TABLE ONLY google_ad_creatives ADD CONSTRAINT "CREATIVES_ID_PKEY" PRIMARY KEY (ad_id);
 CREATE INDEX idx_creatives_youtube_ad_id ON google_ad_creatives (youtube_ad_id);
 CREATE INDEX idx_creatives_youtube_ad_id_null ON google_ad_creatives WHERE youtube_ad_id is null;
 
