@@ -2,3 +2,6 @@ data/*
 *.pyc
 .env
 youtube_dot_com/clean_up_subs.py
+ccs1usr-configuration-jeremy.ini
+secrets.ccs1usr-ipvanish-jeremy.ini
+nyu_docker_proxy/*.ini

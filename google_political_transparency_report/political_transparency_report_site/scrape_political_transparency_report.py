@@ -3,6 +3,7 @@ import csv
 from time import sleep
 from urllib.parse import urljoin, urlparse, parse_qs
 from datetime import date, timedelta, datetime
+import logging
 
 from selenium import webdriver  
 from webdriver_manager.chrome import ChromeDriverManager
@@ -16,7 +17,12 @@ from dotenv import load_dotenv
 load_dotenv()
 import records
 
-DEBUG = os.environ.get("DEBUG", False)
+from ..common.post_to_slack import post_to_slack
+
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("google_political_transparency_report.youtube_dot_com.get_ad_video_info")
+
 DB = records.Database()
 
 AD_DATA_KEYS = [
@@ -132,6 +138,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
   """
     scrapes to an iterator the content from the Google Political Transparency Report advertiser index pages.
   """
+
   while True: 
     try:
       driver = webdriver.Chrome(ChromeDriverManager().install(), options=CHROME_OPTIONS)
@@ -141,20 +148,20 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
       while True:
         start_time = datetime.now()
         ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
-        print("got {} ads".format(len(ads)))
+        log.info("got {} ads".format(len(ads)))
         if not ads:
           sleep(10)
           ads = driver.find_elements_by_css_selector("creative-preview:not(.alreadyprocessed)")
-          print("got {} ads (second attempt)".format(len(ads)))
+          log.info("got {} ads (second attempt)".format(len(ads)))
           if not ads:
             break
         for i,ad in enumerate(ads):
           ad_detail_url = ad.find_element_by_tag_name("a").get_attribute("href")
           ad_id = ad_detail_url.split("/")[-1]
           if i == 0:
-            print(f"new tranche, first creative id: {ad_id}, advertiser: {advertiser_id}")
-          if DEBUG: print(f"ad_id {ad_id}")
-          if DEBUG: print(driver.execute_script("return arguments[0].outerHTML;", ad))
+            log.info(f"new tranche, first creative id: {ad_id}, advertiser: {advertiser_id}")
+          log.debug(f"ad_id {ad_id}")
+          log.debug(driver.execute_script("return arguments[0].outerHTML;", ad))
           if is_still_loading(ad):
             sleep(1)
           if is_still_loading(ad):
@@ -163,23 +170,23 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             try:
               img_url = ad.find_element_by_tag_name("img").get_attribute("src")
             except NoSuchElementException:
-              print("no img?")
-              print(ad, ad.get_attribute('innerHTML'))
+              log.warn("no img?")
+              log.warn(ad, ad.get_attribute('innerHTML'))
               yield {"ad_id": ad_id, "error": True, "ad_type": ad_type}
             youtube_ad_id = img_url.split("/")[4]
             ad_type = "video"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "youtube_ad_id": youtube_ad_id, "ad_type": ad_type, "policy_violation_date": None}
           if is_other_video_ad(ad):
             ad_type = "video"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "ad_type": ad_type, "error": True, "policy_violation_date": None}
           elif is_text_ad(ad):
             ad_container = ad.find_element_by_tag_name("text-ad")
             remove_element(driver, ad_container.find_element_by_css_selector(".ad-icon"))
             text = '\n'.join([div.text for div in ad_container.find_elements_by_css_selector("div")])
             ad_type = "text"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "text": text, "ad_type": ad_type}
           elif is_image_img_ad(ad):
             image_urls = None
@@ -191,7 +198,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             
             ad_text = None
             ad_type = "image"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": ad_type, "policy_violation_date": None}
           elif is_image_iframe_ad(ad):
             iframe = driver.find_element_by_tag_name("iframe")
@@ -226,24 +233,24 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
               ad_type = "image"
             driver.switch_to.default_content()
             ad_type = "image"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "text": ad_text, "error": False, "image_url": image_url,"image_urls": image_urls, "destination": destination, "ad_type": ad_type, "policy_violation_date": None}
           elif is_policy_violation(ad):
             ad_type = "unknown"
-            if DEBUG: print(f"ad type: {ad_type}")
+            log.debug(f"ad type: {ad_type}")
             yield {"ad_id": ad_id, "error": False, "ad_type": ad_type, "policy_violation_date": date.today() }
           elif is_gmail_ad(ad):
             pass
           else:
             # sometimes this appears to happen sporadically, like the page isn't done loading yet?
-            print(f"unrecognized ad type {ad_id}")
+            log.warn(f"unrecognized ad type {ad_id}")
             ad_type = "unknown"
-            if DEBUG: print(f"ad type: {ad_type}")
-            print(driver.execute_script("return arguments[0].outerHTML;", ad))
+            log.debug(f"ad type: {ad_type}")
+            log.debug(driver.execute_script("return arguments[0].outerHTML;", ad))
             yield {"ad_id": ad_id, "error": True, "ad_type": ad_type, "policy_violation_date": None}
           add_class(driver, ad, "alreadyprocessed")
           empty_element(driver, ad) # iframes and stuff take up a lot of memory. we empty out elements once we've processed them. (we empty them out, instead of removing them, because removing them causes weird behavior)
-        print("took: {}".format((datetime.now() - start_time).total_seconds()))
+        log.info("took: {}".format((datetime.now() - start_time).total_seconds()))
         try:
           load_more_btn = driver.find_element_by_tag_name("button.ng-star-inserted")
           load_more_btn.click()
@@ -313,26 +320,43 @@ def running_update_of_all_advertisers():
   # get all the spenders who have spent any money in the past week AND who have ads whose max(date_range_end) is no more than 2 days before the overall max(date_range_end)
   # then go get all their ads after that date
   advertisers = DB.query("""
-    select advertiser_id, advertisers_this_week.advertiser_name, date_range_end_max - interval '1 day' one_days_before_max_ad_date from 
+    select advertiser_id, advertiser_weekly_spend.advertiser_name, date_range_end_max - interval '1 day' one_days_before_max_ad_date from 
       (select advertiser_id, max(date_range_end) date_range_end_max 
       from creative_stats 
       group by advertiser_id) advertisers_this_week
     join advertiser_weekly_spend
       using (advertiser_id)
-    where advertiser_weekly_spend.week_start_date = '2020-11-01' -- (select max(week_start_date) from advertiser_weekly_spend)
+    where advertiser_weekly_spend.week_start_date = (select max(week_start_date) from advertiser_weekly_spend)
     order by spend_usd desc
   """)
   end_date   = date.today() #date(2020, 9, 1)
+  ad_count = 0
+  unrecognized_ad_count = 0
+  start_time = datetime.now()
   for advertiser in advertisers:
     advertiser_id = advertiser["advertiser_id"]
-    print("starting advertiser {} - {}".format(advertiser["advertiser_name"], advertiser_id))
+    log.info("starting advertiser {} - {}".format(advertiser["advertiser_name"], advertiser_id))
     start_date = advertiser["one_days_before_max_ad_date"]
-    with open(f'data/{advertiser_id}_{start_date}_{end_date}_scrape.csv', 'w') as csvfile:
-      for row in scrape_political_transparency_report(advertiser_id, start_date, end_date):
-        ad_data = {k:None for k in AD_DATA_KEYS}
-        ad_data.update(row)
-        ad_data["advertiser_id"] = advertiser_id
-        write_row_to_db(ad_data)
+    for row in scrape_political_transparency_report(advertiser_id, start_date, end_date):
+      ad_data = {k:None for k in AD_DATA_KEYS}
+      ad_data.update(row)
+      ad_data["advertiser_id"] = advertiser_id
+      write_row_to_db(ad_data)
+      ad_count += 1
+      if ad_data["error"] and ad_data["ad_type"] == "unknown": unrecognized_ad_count += 1
+  duration = datetime.now() - start_time
+  log_msg = "scraped {} ads from transparency report site from {} advertisers in {} ({} / advertiser, {}/ ad). {} ads of unrecognized type.".format(
+      ad_count,
+      len(advertisers),
+      duration,
+      duration / len(advertisers),
+      duration / ad_count,
+      unrecognized_ad_count
+    )
+  log.info(log_msg)
+  post_to_slack("Google ads: " + log_msg)
+
+
 
 SCRAPE_ONE_ADVERTISER_TO_DB = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
 SCRAPE_ONE_ADVERTISER_TO_CSV = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
@@ -340,16 +364,16 @@ BACKFILL_EMPTY_ADVERTISERS = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
 if __name__ == "__main__":
   if SCRAPE_ONE_ADVERTISER_TO_CSV:
     advertiser_id = SCRAPE_ONE_ADVERTISER_TO_CSV      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
-    start_date = date(2020, 6, 1)
+    start_date = date(2020, 1, 1)
     end_date   = date.today() #date(2020, 9, 1)
     scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date)
   if SCRAPE_ONE_ADVERTISER_TO_DB:
     advertiser_id = SCRAPE_ONE_ADVERTISER_TO_DB      # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
-    start_date = date(2020, 5 , 1)
-    end_date = date(2020, 9, 2)
+    start_date = date(2020, 1, 1)
+    end_date = date.today()
     scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date)
   elif BACKFILL_EMPTY_ADVERTISERS:
-    print("backfilling empty advertisers")
+    log.info("backfilling empty advertisers")
     # start_date = date(2020, 5, 1)
     # end_date = date(2020, 9, 2)
     # start_date = date(2020, 9, 1)
@@ -360,4 +384,3 @@ if __name__ == "__main__":
   else:
     # on a daily basis
     running_update_of_all_advertisers()
-

@@ -92,13 +92,16 @@ CREATE TABLE youtube_videos (
     fulltitle character varying,
     subs text,
     subtitle_lang character varying,
-    error boolean NOT NULL
+    error boolean NOT NULL,
+    updated_at timestamptz DEFAULT now(),
+    video_unavailable boolean NOT NULL,
+    video_private boolean
 );
 
 CREATE INDEX idx_fts_youtube_videos ON youtube_videos 
 USING gin((setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, title), 'A') || 
        setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs), 'B')));
-
+alter table youtube_videos add primary key (id);
 
 
 CREATE SERVER observations 
@@ -160,5 +163,7 @@ SERVER observations
 OPTIONS (schema_name 'observations', table_name 'youtube_ads')
 
 
+create table models (model_id serial PRIMARY KEY, created_at timestamptz default now(), location text);
 
+create table political_values (youtube_ad_id varchar REFERENCES youtube_videos (id), model_id bigint REFERENCES models (model_id), political_value real, PRIMARY KEY (model_id, youtube_ad_id));
 

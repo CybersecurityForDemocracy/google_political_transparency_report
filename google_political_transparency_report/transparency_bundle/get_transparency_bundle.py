@@ -4,6 +4,7 @@ import os
 from zipfile import ZipFile 
 from dotenv import load_dotenv
 from io import BytesIO
+import tempfile
 
 load_dotenv()
 
@@ -56,8 +57,8 @@ def get_current_bundle():
     """
     if True:
         BUNDLE_URL = "https://storage.googleapis.com/transparencyreport/google-political-ads-transparency-bundle.zip"
-        resp = requests.get(BUNDLE_URL, stream=True)
-        return BytesIO(resp.content)
+        with requests.get(BUNDLE_URL, stream=True) as resp:
+          return BytesIO(resp.content)
     else:
         return open(os.path.join(os.path.dirname(__file__), '..', '..', 'youtubeadlibrary', 'google-political-ads-transparency-bundle (6).zip'), 'rb')
 
@@ -69,7 +70,7 @@ def get_zip_file_by_name(bundle_filelike, filename):
 def get_bundle_date(bundle_filelike):
     data = get_zip_file_by_name(bundle_filelike, 'google-political-ads-updated.csv')
     updated_date = data.decode('utf-8').split("\n")[1]
-    return updated_date
+    return datetime.date(*map(int, updated_date.split("-")))
 
 
 def get_advertiser_stats_csv(bundle_filelike):
@@ -87,6 +88,7 @@ def upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle):
     upload_csv_to_gcs("google-political-ads-advertiser-stats-{}.csv".format(bundle_date), advertiser_stats_csv)
 
 if __name__ == "__main__":
-    local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', 'data') # TODO: should use a tmpdir.
-    with get_current_bundle() as zip_file:
-        upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle)
+    with tempfile.TemporaryDirectory() as local_dest_for_bundle:
+    # local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', '..', 'data') # TODO: should use a tmpdir.
+      with get_current_bundle() as zip_file:
+          upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle)
