@@ -18,7 +18,7 @@ load_dotenv()
 import records
 
 from ..common.post_to_slack import post_to_slack
-
+from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.youtube_dot_com.get_ad_video_info")
@@ -348,9 +348,9 @@ def running_update_of_all_advertisers():
   log_msg = "scraped {} ads from transparency report site from {} advertisers in {} ({} / advertiser, {}/ ad). {} ads of unrecognized type.".format(
       ad_count,
       len(advertisers),
-      duration,
-      duration / len(advertisers),
-      duration / ad_count,
+      formattimedelta(duration),
+      formattimedelta(duration / len(advertisers)),
+      formattimedelta(duration / ad_count),
       unrecognized_ad_count
     )
   log.info(log_msg)

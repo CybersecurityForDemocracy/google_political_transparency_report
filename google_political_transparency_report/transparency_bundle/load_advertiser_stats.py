@@ -3,14 +3,16 @@ script to load from a CSV into SQL db specified as env var DATABASE_URL the adve
 
 """
 
-import agate
-from dotenv import load_dotenv
 import os
 from io import TextIOWrapper, BytesIO
 from datetime import datetime, timedelta
 
+import agate
+from dotenv import load_dotenv
+
 from .get_transparency_bundle import get_current_bundle, get_bundle_date, get_advertiser_stats_csv
 from ..common.post_to_slack import post_to_slack
+from ..common.formattimedelta import formattimedelta
 
 load_dotenv()
 import records
@@ -47,7 +49,7 @@ def load_advertiser_stats_to_db(csvfn, date):
         DB.query(INSERT_QUERY, **ad_data)
         total_rows += 1
     duration = datetime.now() - start_time
-    log1 = "loaded {} advertiser stats records for this week in {}; had {} last week".format(total_rows , duration, "TK")
+    log1 = "loaded {} advertiser stats records for this week in {}".format(total_rows , formattimedelta(duration))
     log.info(log1)
     post_to_slack("Google ads: " + log1)
 

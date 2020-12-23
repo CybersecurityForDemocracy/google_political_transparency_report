@@ -18,6 +18,7 @@ import records
 
 from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, get_zip_file_by_name, get_bundle_date, get_creative_stats_csv
 from ..common.post_to_slack import post_to_slack
+from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.transparency_bundle.creative_stats")
@@ -84,9 +85,10 @@ CREATIVE_STATS_COLUMN_TYPES = {'Ad_ID': agate.Text(), 'Ad_URL': agate.Text(), 'A
 def load_creative_stats_to_db(csvfn, report_date):
     # should log: duration, total rows; New today; here yesterday, gone today.
     total_rows_today = 0
-    start_time_pre_counting = datetime.now()
+
+    # start_time_pre_counting = datetime.now()
     rows_in_yesterdays_report = DB.query("""SELECT count(*) as count FROM creative_stats WHERE report_date = (SELECT max(report_date) from creative_stats where report_date != :report_date);""", report_date=report_date)[0]["count"]
-    duration_pre_counting = (datetime.now() - start_time_pre_counting)
+    # duration_pre_counting = (datetime.now() - start_time_pre_counting)
 
     start_time_data_loading = datetime.now()
     for batch in  chunks(agate.Table.from_csv(csvfn, column_types=CREATIVE_STATS_COLUMN_TYPES ), 100):
@@ -101,12 +103,12 @@ def load_creative_stats_to_db(csvfn, report_date):
         DB.bulk_query(INSERT_QUERY, ads_data)
     duration_data_loading = (datetime.now() - start_time_data_loading)
 
-    start_time_post_counting = datetime.now()
+    # start_time_post_counting = datetime.now()
     rows_present_yesterday_but_missing_today = DB.query("""SELECT count(*) as count FROM creative_stats WHERE report_date = :report_date;""", report_date = report_date - timedelta(days=1))[0]["count"]
     new_rows_today = total_rows_today - (rows_in_yesterdays_report - rows_present_yesterday_but_missing_today) 
-    duration_post_counting = (datetime.now() - start_time_post_counting)
+    # duration_post_counting = (datetime.now() - start_time_post_counting)
 
-    log1 = "loading creative_stats report took {} to load {} total rows; (counting was {})".format(duration_data_loading, total_rows_today, duration_pre_counting + duration_post_counting)
+    log1 = "loading creative_stats report took {} to load {} total rows".format(formattimedelta(duration_data_loading), total_rows_today)
     log2 = "creative stats: {} new rows; {} missing that were present yesterday".format(new_rows_today, rows_present_yesterday_but_missing_today)
     log.info(log1)
     log.info(log2)
