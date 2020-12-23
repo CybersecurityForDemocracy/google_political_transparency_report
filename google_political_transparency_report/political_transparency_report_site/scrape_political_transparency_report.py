@@ -170,8 +170,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             try:
               img_url = ad.find_element_by_tag_name("img").get_attribute("src")
             except NoSuchElementException:
-              log.warn("no img?")
-              log.warn(ad, ad.get_attribute('innerHTML'))
+              log.warning("no img?")
+              log.warning(ad, ad.get_attribute('innerHTML'))
               yield {"ad_id": ad_id, "error": True, "ad_type": ad_type}
             youtube_ad_id = img_url.split("/")[4]
             ad_type = "video"
@@ -243,7 +243,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             pass
           else:
             # sometimes this appears to happen sporadically, like the page isn't done loading yet?
-            log.warn(f"unrecognized ad type {ad_id}")
+            log.warning(f"unrecognized ad type {ad_id} / advertiser: {advertiser_id}")
             ad_type = "unknown"
             log.debug(f"ad type: {ad_type}")
             log.debug(driver.execute_script("return arguments[0].outerHTML;", ad))
