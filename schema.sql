@@ -65,7 +65,7 @@ CREATE TABLE youtube_videos (
     uploader_url character varying,
     channel_id character varying,
     channel_url character varying,
-    upload_date numeric,
+    upload_date date,
     license character varying,
     creator character varying,
     title text,

@@ -138,6 +138,9 @@ class YouTubeVideoScraper:
             video_data["video_private"] = False
             video_data["like_count"] = video_data["like_count"] or 0
             video_data["dislike_count"] = video_data["dislike_count"] or 0
+            if video_data["upload_date"]
+                video_data["upload_date"] = str(video_data["upload_date"])
+
             self.db.query(INSERT_QUERY, **video_data)
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
             break
