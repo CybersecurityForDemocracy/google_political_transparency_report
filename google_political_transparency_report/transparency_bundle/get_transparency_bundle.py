@@ -72,7 +72,8 @@ def get_bundle_date(bundle_filelike):
     updated_date = data.decode('utf-8').split("\n")[1]
     return datetime.date(*map(int, updated_date.split("-")))
 
-
+def get_advertiser_regional_spend_csv(bundle_filelike):
+    return get_zip_file_by_name(bundle_filelike,  "google-political-ads-advertiser-geo-spend.csv")
 def get_advertiser_stats_csv(bundle_filelike):
     return get_zip_file_by_name(bundle_filelike, 'google-political-ads-advertiser-stats.csv')
 def get_advertiser_weekly_spend_csv(bundle_filelike):

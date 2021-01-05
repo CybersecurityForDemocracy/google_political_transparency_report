@@ -29,6 +29,13 @@ CREATE TABLE advertiser_weekly_spend (
 );
 ALTER TABLE ONLY advertiser_weekly_spend ADD CONSTRAINT "ID_PKEY" PRIMARY KEY (advertiser_id,week_start_date);
 
+CREATE TABLE advertiser_regional_spend (
+    advertiser_id character varying NOT NULL,
+    country text NOT NULL,
+    region text NOT NULL,
+    spend_usd integer NOT NULL,
+    report_date date NOT NULL
+);
 
 CREATE TABLE google_ad_creatives (
     advertiser_id character varying NOT NULL,
