@@ -13,7 +13,8 @@ import logging
 load_dotenv()
 import records
 
-from ..common.post_to_slack import post_to_slack
+from ..common.post_to_slack import info_to_slack, warn_to_slack
+from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.youtube_dot_com.get_ad_video_info")
@@ -185,22 +186,61 @@ def scrape_new_ads():
 
     with ydl:
         ytscraper = YouTubeVideoScraper(DB, ydl)
+        SUCCESS_PROPORTION_WARN_THRESHOLD = 0.75 # percent
+        DURATION_PER_VIDEO_WARN_THRESHOLD = 10 # seconds
+        MIN_SCRAPED_ADS_TO_ALERT_ABOUT = 4 # videos (if there's only 3 ads, then them all being errors might not be a problem for us)
 
         scraped_youtube_video_ads = ytscraper.new_ads_from_political_transparency_report_site()
         log.info("scraping {} videos (source: transparency site) from YouTube".format(len(scraped_youtube_video_ads)))
-        duration, success, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(scraped_youtube_video_ads)
+        duration, success_count, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(scraped_youtube_video_ads)
         log1 = "scraped {} videos (source: transparency site) from YouTube in {}; {}s per video".format(len(scraped_youtube_video_ads), formattimedelta(duration), duration / len(scraped_youtube_video_ads))
-        log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success, error_count, private_count, unavailable_count)
+        log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success_count, error_count, private_count, unavailable_count)
         log.info(log1)
         log.info(log2)
-        post_to_slack(log1 + '\n' + log2)
+        if SUCCESS_PROPORTION_WARN_THRESHOLD > ( success_count / len(scraped_youtube_video_ads) and len(scraped_youtube_video_ads) > MIN_SCRAPED_ADS_TO_ALERT_ABOUT):  
+            warn_msg = "proportion of scrapable youtube ads was less than expected (expected: >= {}, got: {})".format(SUCCESS_PROPORTION_WARN_THRESHOLD * 100 , int(( success_count / len(scraped_youtube_video_ads)) * 100))
+            log.warn(log1)
+            log.warn(log2)
+            warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
+        elif DURATION_PER_VIDEO_WARN_THRESHOLD < (duration / len(scraped_youtube_video_ads)).total_seconds(): 
+            warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD,  (duration / len(scraped_youtube_video_ads)).total_seconds())
+            log.warn(log1)
+            log.warn(log2)
+            warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
+        else:
+            log.info(log1)
+            log.info(log2)
+            info_to_slack("Google ads: " + log1 + '\n' + log2)
+
+
+        OBSERVED_VIDEO_WARN_THRESHOLD = 200 # count
         observed_youtube_video_ads = ytscraper.new_ads_from_ad_observer()
         log.info("scraping {} videos (source: observations) from YouTube".format(len(observed_youtube_video_ads)))
-        duration, success, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(observed_youtube_video_ads)
-        log1 = "scraped {} videos (source: observations) from YouTube in {}; {}s per video".format(len(observed_youtube_video_ads), formattimedelta(duration), duration / len(observed_youtube_video_ads)
-        log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success, error_count, private_count, unavailable_count)
-        log.info(log1)
-        log.info(log2)
-        post_to_slack("Google ads: " + log1 + '\n' + log2)
+        duration, success_count, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(observed_youtube_video_ads)
+        log1 = "scraped {} videos (source: observations) from YouTube in {}; {}s per video".format(len(observed_youtube_video_ads), formattimedelta(duration), duration / len(observed_youtube_video_ads))
+        log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success_count, error_count, private_count, unavailable_count)
+
+        # note that we don't warn if there are no new videos in the transparency portal, just since new political ads seems rare enough that that might happen in real life.
+        if OBSERVED_VIDEO_WARN_THRESHOLD > len(observed_youtube_video_ads):
+            warn_msg = "number of ad observer-observed video ads is less than expected (expected: {}, got: {})".format(OBSERVED_VIDEO_WARN_THRESHOLD, len(observed_youtube_video_ads))
+            log.warn(log1)
+            log.warn(log2)
+            log.warn(warn_msg)
+            warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
+        elif SUCCESS_PROPORTION_WARN_THRESHOLD > ( success_count / len(observed_youtube_video_ads)): 
+            warn_msg = "proportion of scrapable youtube ads was less than expected (expected: >= {}, got: {})".format(SUCCESS_PROPORTION_WARN_THRESHOLD * 100 , int(( success_count / len(observed_youtube_video_ads)) * 100))
+            log.warn(log1)
+            log.warn(log2)
+            warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
+        elif DURATION_PER_VIDEO_WARN_THRESHOLD < (duration / len(observed_youtube_video_ads)).total_seconds(): 
+            warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD, (duration / len(observed_youtube_video_ads)).total_seconds())
+            log.warn(log1)
+            log.warn(log2)
+
+            warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
+        else:
+            log.info(log1)
+            log.info(log2)
+            info_to_slack("Google ads: " + log1 + '\n' + log2 + '\n')
 if __name__ == "__main__":
     scrape_new_ads()

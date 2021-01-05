@@ -6,6 +6,6 @@ pip install -r google_political_transparency_report/transparency_bundle/requirem
 pip install -r google_political_transparency_report/youtube_dot_com/requirements.txt
 python3 -m google_political_transparency_report.transparency_bundle.daily
 python3 -m google_political_transparency_report.political_transparency_report_site.scrape_political_transparency_report
-# python3 -m google_political_transparency_report.youtube_dot_com.get_ad_video_info_from_youtube
+python3 -m google_political_transparency_report.youtube_dot_com.get_ad_video_info_from_youtube
 deactivate
 rm -r  venv-$NOW

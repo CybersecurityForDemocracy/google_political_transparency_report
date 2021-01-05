@@ -10,6 +10,7 @@ Ads on Google come in four flavors that Jeremy can detect on Google's political 
  - image and text ads  (from DoubleClick, I *think*; iframed) (some of which are app install ads)
  - Gmail ads (which I haven't seen any examples of in 2020.)
  - completely blank ads, which is a real puzzle (/political-ads/advertiser/AR378575459899670528/creative/CR274967860739047424)
+ - "preview unavailable" ads, e.g. https://transparencyreport.google.com/political-ads/advertiser/AR225271103394676736/creative/CR400613589930475520
  - odd broken image ad https://transparencyreport.google.com/political-ads/advertiser/AR204534863850635264/creative/CR454352701774364672
 
 Plus:
@@ -63,9 +64,6 @@ select creative_stats.advertiser_id, creative_stats.advertiser_name, count(*) cr
  AR24814465610416128  | BEACHSIDE MEDIA INC    |                                   1 | {CR214785129720053760}
 ```
 2. We don't collect any data about "other video" ads (most of the ads where ad_type = 'video' and error is true.) We should get these eventually from the creative pages (because no information is presented on the search result pages.)
-
-
-3. the youtube scraper (for transcripts and video metadata) is currently turned off because we get ratelimited.
 
 ## How to deploy this
 

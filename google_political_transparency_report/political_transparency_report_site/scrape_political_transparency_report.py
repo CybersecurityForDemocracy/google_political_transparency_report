@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import records
 
-from ..common.post_to_slack import post_to_slack
+from ..common.post_to_slack import info_to_slack, warn_to_slack
 from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -345,6 +345,12 @@ def running_update_of_all_advertisers():
       ad_count += 1
       if ad_data["error"] and ad_data["ad_type"] == "unknown": unrecognized_ad_count += 1
   duration = datetime.now() - start_time
+
+
+  AD_COUNT_WARN_THRESHOLD = 100
+  ADVERTISER_COUNT_WARN_THRESHOLD = 10
+  PER_AD_DURATION_WARN_THRESHOLD = 2 # seconds
+  UNRECOGNIZED_AD_TYPE_COUNT_WARN_THRESHOLD = 0.1 # proportion
   log_msg = "scraped {} ads from transparency report site from {} advertisers in {} ({} / advertiser, {}/ ad). {} ads of unrecognized type.".format(
       ad_count,
       len(advertisers),
@@ -353,8 +359,29 @@ def running_update_of_all_advertisers():
       formattimedelta(duration / ad_count),
       unrecognized_ad_count
     )
-  log.info(log_msg)
-  post_to_slack("Google ads: " + log_msg)
+  if AD_COUNT_WARN_THRESHOLD > ad_count: 
+    warn_msg = "political transparency report site scraper found fewer ads than expected (expected: {}, got: {})".format(AD_COUNT_WARN_THRESHOLD, ad_count)
+    log.warn(log_msg)
+    log.warn(warn_msg)
+    warn_to_slack("Google ads: " + log_msg + '\n' + warn_msg)
+  elif ADVERTISER_COUNT_WARN_THRESHOLD > len(advertisers): 
+    warn_msg = "political transparency report site scraper found fewer advertisers than expected (expected: {}, got: {})".format(ADVERTISER_COUNT_WARN_THRESHOLD, len(advertisers))
+    log.warn(log_msg)
+    log.warn(warn_msg)
+    warn_to_slack("Google ads: " + log_msg + '\n' + warn_msg)
+  elif PER_AD_DURATION_WARN_THRESHOLD < (duration / ad_count).total_seconds(): 
+    warn_msg = "political transparency report site scraper took longer than expected to scrape each ad (expected: {}, got: {})".format(PER_AD_DURATION_WARN_THRESHOLD, (duration / ad_count).total_seconds())
+    log.warn(log_msg)
+    log.warn(warn_msg)
+    warn_to_slack("Google ads: " + log_msg + '\n' + warn_msg)
+  elif UNRECOGNIZED_AD_TYPE_COUNT_WARN_THRESHOLD < (unrecognized_ad_count / ad_count): 
+    warn_msg = "political transparency report site scraper found a greater proportion of ads of unknown type (expected: < {}, got: {})".format(UNRECOGNIZED_AD_TYPE_COUNT_WARN_THRESHOLD, (unrecognized_ad_count / ad_count))
+    log.warn(log_msg)
+    log.warn(warn_msg)
+    warn_to_slack("Google ads: " + log_msg + '\n' + warn_msg)
+  else:
+    log.info(log_msg)
+    info_to_slack("Google ads: " + log_msg)
 
 
 

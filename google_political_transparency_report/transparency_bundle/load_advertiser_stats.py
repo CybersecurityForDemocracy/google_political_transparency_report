@@ -11,7 +11,7 @@ import agate
 from dotenv import load_dotenv
 
 from .get_transparency_bundle import get_current_bundle, get_bundle_date, get_advertiser_stats_csv
-from ..common.post_to_slack import post_to_slack
+from ..common.post_to_slack import info_to_slack
 from ..common.formattimedelta import formattimedelta
 
 load_dotenv()
@@ -51,7 +51,7 @@ def load_advertiser_stats_to_db(csvfn, date):
     duration = datetime.now() - start_time
     log1 = "loaded {} advertiser stats records for this week in {}".format(total_rows , formattimedelta(duration))
     log.info(log1)
-    post_to_slack("Google ads: " + log1)
+    info_to_slack("Google ads: " + log1)
 
 
 if __name__ == "__main__":

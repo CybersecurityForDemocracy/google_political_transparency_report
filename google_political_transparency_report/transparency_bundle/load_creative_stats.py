@@ -17,7 +17,7 @@ load_dotenv()
 import records
 
 from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, get_zip_file_by_name, get_bundle_date, get_creative_stats_csv
-from ..common.post_to_slack import post_to_slack
+from ..common.post_to_slack import info_to_slack
 from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -112,7 +112,7 @@ def load_creative_stats_to_db(csvfn, report_date):
     log2 = "creative stats: {} new rows; {} missing that were present yesterday".format(new_rows_today, rows_present_yesterday_but_missing_today)
     log.info(log1)
     log.info(log2)
-    post_to_slack("Google ads: " + log1 + "\n" + log2)
+    info_to_slack("Google ads: " + log1 + "\n" + log2)
 
 
 if __name__ == "__main__":
