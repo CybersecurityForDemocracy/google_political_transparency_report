@@ -27,15 +27,19 @@ There are three data sources for these ads:
 This data joins up via YouTube video IDs to Ad Observer observations, which are otherwise outside the scope of this document.
 
 ## Database stuff
-Each of those data sources has its own table in Postgres.
+Each of those data sources has its own table(s) in Postgres.
 
-- creative_stats (creative_stats.csv)
+- creative_stats, advertiser_weekly_spend, advertiser_regional_spend, advertiser_stats (transparency bundle stuff)
+  - creative_stats is a sync of the CSV from the bundle, but adds `report_date`, which is the _most recent_ report to include that row -- because some ads stop appearing in the bundle.
+  - advertiser_regional_spend is a sync of the CSV, with a `report_date` added, so it's a time series..
+  - advertiser_stats is just a sync (with report date added, it represents the most recent report to include that row.)
+  - advertiser_weekly_spend is a each CSV, appended in the table, so it's a time series. (the underlying CSV is a time series.)
 - google_ad_creatives (scraped Transparency Report website data)
 - youtube_videos (youtube-scraped video data, transcripts etc.)
 
 ## Temporal aspects
 
-- we should scrape the Transparency Report website data frequently, since that data can disappear.
+- we scrape the Transparency Report website data daily, since that data can disappear, e.g. if an ad is taken down for a policy violation.
 - creative_stats and advertiser_weekly_spend are synced to the latest copy; each day's copy of advertiser_stats is kept (so you can chart total spend and total ads per day).
 - do YouTube videos change? I dunno. Probably doesn't matter. Maybe the transcripts aren't instant? We'll find out!
 
@@ -62,8 +66,9 @@ select creative_stats.advertiser_id, creative_stats.advertiser_name, count(*) cr
  AR478907476482195456 | TURNING POINT USA, NFP |                                   3 | {CR227333855927861248,CR173009185422704640,CR183283022072643584}
  AR120847323008860160 | CONSERVATIVE BUZZ LLC  |                                   1 | {CR441281226507026432}
  AR24814465610416128  | BEACHSIDE MEDIA INC    |                                   1 | {CR214785129720053760}
+
 ```
-2. We don't collect any data about "other video" ads (most of the ads where ad_type = 'video' and error is true.) We should get these eventually from the creative pages (because no information is presented on the search result pages.)
+2. We don't collect any data about "other video" ads (most of the ads where ad_type = 'video' and error is true.) We should get these eventually from the creative pages (because no information is presented on the search result pages.). There may be other unrecognized ad types.
 
 ## How to deploy this
 
