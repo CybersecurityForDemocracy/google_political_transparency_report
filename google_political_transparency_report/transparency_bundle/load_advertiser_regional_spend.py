@@ -57,7 +57,7 @@ def load_advertiser_regional_spend_to_db(csv_filelike, bundle_date):
     total_rows = 0
     start_time = datetime.now()
     for row in  agate.Table.from_csv(csv_filelike):
-        if row["Country"] != 'US':
+        if "Country" not in row or row["Country"] != 'US':
             continue
         ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
         ad_data["spend_usd"] = ad_data["spend_usd"] or 0
