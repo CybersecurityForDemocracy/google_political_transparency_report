@@ -347,7 +347,7 @@ def running_update_of_all_advertisers():
   duration = datetime.now() - start_time
 
 
-  AD_COUNT_WARN_THRESHOLD = 100
+  AD_COUNT_WARN_THRESHOLD = 50
   ADVERTISER_COUNT_WARN_THRESHOLD = 10
   PER_AD_DURATION_WARN_THRESHOLD = 2 # seconds
   UNRECOGNIZED_AD_TYPE_COUNT_WARN_THRESHOLD = 0.1 # proportion
