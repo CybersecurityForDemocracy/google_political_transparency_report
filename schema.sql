@@ -36,6 +36,7 @@ CREATE TABLE advertiser_regional_spend (
     spend_usd integer NOT NULL,
     report_date date NOT NULL
 );
+ALTER TABLE ONLY advertiser_regional_spend ADD CONSTRAINT "ADV_REGIONAL_SPEND_PKEY" PRIMARY KEY (advertiser_id, country, region, report_date);
 
 CREATE TABLE google_ad_creatives (
     advertiser_id character varying NOT NULL,
@@ -141,13 +142,6 @@ CREATE FOREIGN TABLE observed_youtube_ads (
         age_estimation boolean,
         gender_estimation boolean,
 
-        homeownership_status_estimation boolean,
-        company_size_estimation boolean,
-        job_industry_estimation boolean,
-        marital_status_estimation boolean,
-        education_status_estimation boolean,
-        visit_to_advertisers_website_or_app boolean,
-        search_terms boolean,
 
         title text,
         paid_for_by text,
@@ -164,13 +158,20 @@ CREATE FOREIGN TABLE observed_youtube_ads (
         hostVideoTitle text,
         creative text,
         reasons text,
-        lang text
+        lang text,
+        homeownership_status_estimation boolean,
+        company_size_estimation boolean,
+        job_industry_estimation boolean,
+        marital_status_estimation boolean,
+        education_status_estimation boolean,
+        visit_to_advertisers_website_or_app boolean,
+        search_terms boolean
   )
 SERVER observations
 OPTIONS (schema_name 'observations', table_name 'youtube_ads')
 
 
-create table models (model_id serial PRIMARY KEY, created_at timestamptz default now(), location text);
+create table models (model_id serial PRIMARY KEY, created_at timestamptz default now(), location text, model_name text, vocab_path text, encoder_path text);
 
-create table political_values (youtube_ad_id varchar REFERENCES youtube_videos (id), model_id bigint REFERENCES models (model_id), political_value real, PRIMARY KEY (model_id, youtube_ad_id));
+create table inference_values (youtube_ad_id varchar REFERENCES youtube_videos (id), model_id bigint REFERENCES models (model_id), value real, PRIMARY KEY (model_id, youtube_ad_id));
 
