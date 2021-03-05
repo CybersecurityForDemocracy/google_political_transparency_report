@@ -81,8 +81,7 @@ def get_advertiser_weekly_spend_csv(bundle_filelike):
 def get_creative_stats_csv(bundle_filelike):
     return get_zip_file_by_name(bundle_filelike, "google-political-ads-creative-stats.csv")
 
-def upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle):
-    bundle_date = get_bundle_date(zip_file)
+def upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date):
     advertiser_stats_csv = get_advertiser_stats_csv(zip_file)
     write_current_bundle_to_disk(local_dest_for_bundle, zip_file, bundle_date)
     write_advertiser_stats_to_disk(local_dest_for_bundle, advertiser_stats_csv, bundle_date)
@@ -92,4 +91,5 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as local_dest_for_bundle:
     # local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', '..', 'data') # TODO: should use a tmpdir.
       with get_current_bundle() as zip_file:
-          upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle)
+          bundle_date = get_bundle_date(zip_file)        
+          upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)

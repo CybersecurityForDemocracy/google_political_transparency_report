@@ -57,7 +57,7 @@ def load_advertiser_regional_spend_to_db(csv_filelike, bundle_date):
     total_rows = 0
     start_time = datetime.now()
     for row in  agate.Table.from_csv(csv_filelike):
-        if "Country" not in row or row["Country"] != 'US':
+        if "Country" not in row.keys() or row["Country"] != 'US':
             continue
         ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
         ad_data["spend_usd"] = ad_data["spend_usd"] or 0
@@ -76,7 +76,13 @@ if __name__ == "__main__":
     # csvfn = os.path.join(os.path.dirname(__file__), '..', 'data/google-political-ads-transparency-bundle/google-political-ads-advertiser-weekly-spend.csv')
     # with open(csvfn, 'r') as f:
         # load_advertiser_weekly_spend_to_db(f)
+    from sys import argv
+    def get_bundle_from_zip(zip_fn):
+        return open(zip_fn, 'rb')
+
     local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', 'data')
-    with get_current_bundle() as zip_file:
-        bundle_date = get_bundle_date(zip_file)
+#    with get_current_bundle() as zip_file:
+    with get_bundle_from_zip(argv[1]) as zip_file:
+        explicit_bundle_date = datetime.date(*map(int, argv[2].split("-"))) if len(argv) >= 3 else None
+        bundle_date = explicit_bundle_date or get_bundle_date(zip_file)
         load_advertiser_regional_spend_to_db(TextIOWrapper(BytesIO(get_advertiser_regional_spend_csv(zip_file))), bundle_date)

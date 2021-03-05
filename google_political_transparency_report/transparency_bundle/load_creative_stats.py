@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 import os
 from io import TextIOWrapper, BytesIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import logging
 
 load_dotenv()
@@ -82,6 +82,15 @@ CREATIVE_STATS_COLUMN_TYPES = {'Ad_ID': agate.Text(), 'Ad_URL': agate.Text(), 'A
                     'Spend_Range_Min_USD': agate.Number(), 'Spend_Range_Max_USD': agate.Number(), 'Spend_Range_Min_EUR': agate.Number(), 'Spend_Range_Max_EUR': agate.Number(), 'Spend_Range_Min_INR': agate.Number(), 'Spend_Range_Max_INR': agate.Number(), 'Spend_Range_Min_BGN': agate.Number(), 'Spend_Range_Max_BGN': agate.Number(), 'Spend_Range_Min_HRK': agate.Number(), 'Spend_Range_Max_HRK': agate.Number(), 'Spend_Range_Min_CZK': agate.Number(), 'Spend_Range_Max_CZK': agate.Number(), 'Spend_Range_Min_DKK': agate.Number(), 'Spend_Range_Max_DKK': agate.Number(), 'Spend_Range_Min_HUF': agate.Number(), 'Spend_Range_Max_HUF': agate.Number(), 'Spend_Range_Min_PLN': agate.Number(), 'Spend_Range_Max_PLN': agate.Number(), 'Spend_Range_Min_RON': agate.Number(), 'Spend_Range_Max_RON': agate.Number(), 'Spend_Range_Min_SEK': agate.Number(), 'Spend_Range_Max_SEK': agate.Number(), 'Spend_Range_Min_GBP': agate.Number(), 'Spend_Range_Max_GBP': agate.Number(), 'Spend_Range_Min_NZD': agate.Number(), 'Spend_Range_Max_NZD': agate.Number()}
 
 
+OLD_CREATIVE_STATS_COLUMN_TYPES = {'Ad_ID': agate.Text(), 'Ad_URL': agate.Text(), 'Ad_Type': agate.Text(), 
+                    'Regions': agate.Text(), 'Advertiser_ID': agate.Text(), 'Advertiser_Name': agate.Text(), 
+                    'Ad_Campaigns_List': agate.Text(), 'Date_Range_Start': agate.Date(), 'Date_Range_End': agate.Date(), 
+                    'Num_of_Days': agate.Number(), 'Impressions': agate.Text(), 'Spend_USD': agate.Text(), 
+                    }
+
+
+CREATIVE_STATS_SCHEMA_CHANGE_DATE = date(2020, 7, 1) # it's sometime around here, I don't know for sure, that the schema changes
+
 def load_creative_stats_to_db(csvfn, report_date):
     # should log: duration, total rows; New today; here yesterday, gone today.
     total_rows_today = 0
@@ -91,11 +100,13 @@ def load_creative_stats_to_db(csvfn, report_date):
     # duration_pre_counting = (datetime.now() - start_time_pre_counting)
 
     start_time_data_loading = datetime.now()
-    for batch in  chunks(agate.Table.from_csv(csvfn, column_types=CREATIVE_STATS_COLUMN_TYPES ), 100):
+    for batch in  chunks(agate.Table.from_csv(csvfn, column_types=(CREATIVE_STATS_COLUMN_TYPES if report_date > CREATIVE_STATS_SCHEMA_CHANGE_DATE else OLD_CREATIVE_STATS_COLUMN_TYPES)), 100):
         ads_data = []
         for row in batch:
             total_rows_today += 1
             ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
+            for k in KEYS: 
+                ad_data[k] = ad_data.get(k, None)
             ad_data["impressions_min"], ad_data["impressions_max"] = parse_impressions_string(row["Impressions"])
             ad_data["spend_usd"] = ad_data["spend_usd"] or 0
             ad_data["report_date"] = report_date
