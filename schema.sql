@@ -175,3 +175,6 @@ create table models (model_id serial PRIMARY KEY, created_at timestamptz default
 
 create table inference_values (youtube_ad_id varchar REFERENCES youtube_videos (id), model_id bigint REFERENCES models (model_id), value real, PRIMARY KEY (model_id, youtube_ad_id));
 
+create table region_populations (region text, region_abbr varchar(2), population int);
+-- ccs1 $ \copy region_populations from '/home/jmerrill/US populations, 2019 - populations by state.csv' with csv header;
+-- that's from: https://docs.google.com/spreadsheets/d/1PEAcSwPTTBV12I5OQwh_qtuUsqeUJmUm8JNFQ3iHVpc/edit#gid=1891095703
