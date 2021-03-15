@@ -74,13 +74,13 @@ class YouTubeVideoScraper:
 
     def get_proxy(self):
         if any([environ.get(var) for var in PROXY_ENV_VARS]) and len(self.available_proxies):
-            return "socks5://{}:{}@{}:{}".format(environ["SOCKS5USERNAME"], environ["SOCKS5PASSWORD"], self.available_proxies.pop(), environ[ "SOCKS5PORT"])
+            proxy_server = self.available_proxies.pop()
+            log.info("using proxy {}".format(proxy_server))
+            return "socks5://{}:{}@{}:{}".format(environ["SOCKS5USERNAME"], environ["SOCKS5PASSWORD"], proxy_server, environ[ "SOCKS5PORT"])
         else:
             return None 
 
     def refresh_ydl(self):
-        if self.ydl:
-            self.ydl.close()
         self.ydl_arguments["proxy"] = self.get_proxy()
         self.ydl = youtube_dl.YoutubeDL(self.ydl_arguments)
 
@@ -135,6 +135,7 @@ class YouTubeVideoScraper:
                 subtitle_data = requests.get(video['requested_subtitles']['es']['url'], stream=True).text
                 subtitle_lang = "es"
             else:
+                log.info("no subtitles found.")
                 subtitle_data = None
                 subtitle_lang = None
 
@@ -168,8 +169,6 @@ class YouTubeVideoScraper:
             self.db.query(INSERT_QUERY, **video_data)
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
             break
-        self.ydl.close()
-
 
     def new_ads_from_political_transparency_report_site(self):
         return self.db.query("""
@@ -212,7 +211,6 @@ def scrape_new_ads():
         'writeautomaticsub': True,
         'subtitleslangs': ['en'],
     }
-    # ydl = youtube_dl.YoutubeDL(**ydl_args)
     DB = records.Database()
 
     # with ydl:
