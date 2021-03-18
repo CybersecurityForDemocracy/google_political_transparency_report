@@ -122,6 +122,10 @@ class YouTubeVideoScraper:
                         if 'HTTP Error 429' in repr(e):
                             print('429, sleeping 2m')
                             sleep(120)
+                            self.refresh_ydl()                              
+                        elif 'urlopen error [Errno 111] Connection refused' in repr(e):
+                            print('connection refused')
+                            self.refresh_ydl()
                         else:
                             sleep(5)
                         print("retrying")
