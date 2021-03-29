@@ -72,7 +72,7 @@ select creative_stats.advertiser_id, creative_stats.advertiser_name, count(*) cr
 
 ## How to deploy this
 
-`rsync -av -e ssh --exclude='*.env' --exclude='data' --exclude='examples' . ccs1:/home/jmerrill/google_political_transparency_report`
+`rsync -av -e ssh --exclude='*.env' --exclude='.git' --exclude='data' --exclude='examples' . ccs1:/home/jmerrill/google_political_transparency_report`
 
 SQL tables were created manually.
 
@@ -93,14 +93,14 @@ search apparently non-political ad observer ads (note: inefficient because of th
 will find ads whose subs or title contain "Biden" but which don't appear to have a paid for by.
 
 ```
-    select 
-        youtube_videos.id, observed_youtube_ads.title, uploader, youtube_videos.title, alt_title, fulltitle 
+select 
+        youtube_videos.id, youtube_videos.description, observed_youtube_ads.title, uploader, youtube_videos.title, alt_title, fulltitle 
     from observed_youtube_ads 
     join youtube_videos on observed_youtube_ads.platformitemid = youtube_videos.id 
     left outer join google_ad_creatives on platformitemid = youtube_ad_id 
     where google_ad_creatives.youtube_ad_id is null 
-      and paid_for_by = '' 
-      and setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, youtube_videos.title), 'A') || setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs), 'B') @@ plainto_tsquery('biden');
+      and paid_for_by = ''     
+      and setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, coalesce(youtube_videos.title, '')), 'A') || setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, coalesce(subs, '')), 'B') || setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, coalesce(youtube_videos.description, '')), 'A') @@ plainto_tsquery('obamacare');
 ```
 
 YouTube ads seen by the collector for which we've scraped video info:
