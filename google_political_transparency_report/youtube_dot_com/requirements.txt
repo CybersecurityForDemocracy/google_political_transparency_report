@@ -4,3 +4,4 @@ records
 webvtt-py
 python-dotenv
 requests
+requests[socks]

@@ -119,6 +119,7 @@ class YouTubeVideoScraperFactory():
             overall_results["error_count"] = overall_results.get("error_count", 0) + error_count
             overall_results["unavailable_count"] = overall_results.get("unavailable_count", 0) + unavailable_count
             overall_results["private_count"] = overall_results.get("private_count", 0) + private_count
+            overall_results["total_remaining_at_start"] = len(what_to_scrape)
         return overall_results
 
 class YouTubeVideoScraper:
@@ -184,7 +185,7 @@ class YouTubeVideoScraper:
                     log.info("video unavailable")
                     return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
 
-                elif 'no conn, hlsvp, hlsManifestUrl or url_encoded_fmt_stream_map information found in video info' in repr(e):
+                elif 'no conn, hlsvp, hlsManifestUrl or url_encoded_fmt_stream_map information found in video info' in repr(e) or 'Private video' in repr(e):
                     video_data = {"video_unavailable": True, "video_private": True, "error": False}
                     self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
                     log.info("video unavailable, private")
@@ -196,7 +197,7 @@ class YouTubeVideoScraper:
                         self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
                         # This video is not available in your country
                         # The uploader has not made this video available in your country
-                        log.warn("unknown video fetching error, will retry", repr(e))
+                        log.warn("unknown video fetching error, will retry: " +  repr(e))
                         return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
 
                     else:
@@ -214,22 +215,23 @@ class YouTubeVideoScraper:
                         continue
 
             if video['requested_subtitles'] and "en" in video['requested_subtitles']:
-                subtitle_data = requests.get(video['requested_subtitles']['en']['url'], stream=True).text
+                subtitle_data = requests.get(video['requested_subtitles']['en']['url'], stream=True, 
+                    proxies=dict(http=self.ydl_arguments["proxy"],
+                                 https=self.ydl_arguments["proxy"])).text
                 subtitle_lang = "en"
-                log.info("English subtitles found for {}".format(youtube_ad_id))                
             elif video['requested_subtitles'] and "es" in video['requested_subtitles']:
-                subtitle_data = requests.get(video['requested_subtitles']['es']['url'], stream=True).text
+                subtitle_data = requests.get(video['requested_subtitles']['es']['url'], stream=True, 
+                    proxies=dict(http=self.ydl_arguments["proxy"],
+                                 https=self.ydl_arguments["proxy"])).text
                 subtitle_lang = "es"
-                log.info("Spanish subtitles found for {}".format(youtube_ad_id))                
             else:
-                log.info("no subtitles found for {}".format(youtube_ad_id))
                 subtitle_data = None
                 subtitle_lang = None
 
             if subtitle_data and SUBTITLE_RATE_LIMIT_STRING in subtitle_data:
-                self.refresh_ydl()
                 video_data = {"error": True, "video_unavailable": False, "video_private": False}
                 self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
+                log.info("subtitle query was rate-limited for {}".format(youtube_ad_id))
                 return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
             elif subtitle_data:
                 subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data)) if caption.text.strip() != '']
@@ -238,7 +240,9 @@ class YouTubeVideoScraper:
                     if line_a not in line_b:
                         subtitle_lines_deduped.append(line_b)
                 subs = '\n'.join(subtitle_lines_deduped)
+                log.info("subtitles found for {}".format(youtube_ad_id))                
             else:
+                log.info("no subtitles found {}".format(youtube_ad_id))                
                 subs = None
 
 
@@ -280,8 +284,9 @@ def scrape_new_ads():
     unavailable_count = results["unavailable_count"]
     private_count = results["private_count"]
     total_attempted = results["attempted_count"]
+    total_remaining_at_start = results["total_remaining_at_start"]
 
-    log1 = "scraped {} videos (source: transparency site) from YouTube in {}; {}s per video".format(total_attempted, formattimedelta(duration), duration / total_attempted if total_attempted > 0 else "NA" )
+    log1 = "scraped {}/{} videos from YouTube in {}; {}s per video".format(total_attempted, total_remaining_at_start, formattimedelta(duration), duration / total_attempted if total_attempted > 0 else "NA" )
     log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success_count, error_count, private_count, unavailable_count)
     log.info(log1)
     log.info(log2)
@@ -299,61 +304,6 @@ def scrape_new_ads():
         log.info(log1)
         log.info(log2)
         info_to_slack("Google ads: " + log1 + '\n' + log2)
-
-    # scraped_youtube_video_ads = ytscraper.new_ads_from_political_transparency_report_site()
-    # log.info("scraping {} videos (source: transparency site) from YouTube".format(len(scraped_youtube_video_ads)))
-    # duration, success_count, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(scraped_youtube_video_ads)
-    # log1 = "scraped {} videos (source: transparency site) from YouTube in {}; {}s per video".format(len(scraped_youtube_video_ads), formattimedelta(duration), duration / len(scraped_youtube_video_ads) if len(scraped_youtube_video_ads) > 0 else "NA" )
-    # log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success_count, error_count, private_count, unavailable_count)
-    # log.info(log1)
-    # log.info(log2)
-    # if len(scraped_youtube_video_ads) > 0 and SUCCESS_PROPORTION_WARN_THRESHOLD > ( success_count / len(scraped_youtube_video_ads) and len(scraped_youtube_video_ads) > MIN_SCRAPED_ADS_TO_ALERT_ABOUT):  
-    #     warn_msg = "proportion of scrapable youtube ads was less than expected (expected: >= {}, got: {})".format(SUCCESS_PROPORTION_WARN_THRESHOLD * 100 , int(( success_count / len(scraped_youtube_video_ads)) * 100))
-    #     log.warning(log1)
-    #     log.warning(log2)
-    #     warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
-    # elif len(scraped_youtube_video_ads) > 0 and DURATION_PER_VIDEO_WARN_THRESHOLD < (duration / len(scraped_youtube_video_ads)).total_seconds(): 
-    #     warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD,  (duration / len(scraped_youtube_video_ads)).total_seconds())
-    #     log.warning(log1)
-    #     log.warning(log2)
-    #     warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
-    # else:
-    #     log.info(log1)
-    #     log.info(log2)
-    #     info_to_slack("Google ads: " + log1 + '\n' + log2)
-
-
-    # OBSERVED_VIDEO_WARN_THRESHOLD = 200 # count
-    # observed_youtube_video_ads = ytscraper.new_ads_from_ad_observer()
-    # log.info("scraping {} videos (source: observations) from YouTube".format(len(observed_youtube_video_ads)))
-    # duration, success_count, error_count, unavailable_count, private_count = ytscraper.scrape_from_list(observed_youtube_video_ads)
-    # log1 = "scraped {} videos (source: observations) from YouTube in {}; {}s per video".format(len(observed_youtube_video_ads), formattimedelta(duration), duration / len(observed_youtube_video_ads) if len(observed_youtube_video_ads) > 0 else "NA" )
-    # log2 = "success: {}; error: {} (private: {}, unavailable: {})".format(success_count, error_count, private_count, unavailable_count)
-
-    # # note that we don't warn if there are no new videos in the transparency portal, just since new political ads seems rare enough that that might happen in real life.
-    # if OBSERVED_VIDEO_WARN_THRESHOLD > len(observed_youtube_video_ads):
-    #     warn_msg = "number of ad observer-observed video ads is less than expected (expected: {}, got: {})".format(OBSERVED_VIDEO_WARN_THRESHOLD, len(observed_youtube_video_ads))
-    #     log.warning(log1)
-    #     log.warning(log2)
-    #     log.warning(warn_msg)
-    #     warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
-    # elif len(observed_youtube_video_ads) > 0 and SUCCESS_PROPORTION_WARN_THRESHOLD > ( success_count / len(observed_youtube_video_ads)): 
-    #     warn_msg = "proportion of scrapable youtube ads was less than expected (expected: >= {}, got: {})".format(SUCCESS_PROPORTION_WARN_THRESHOLD * 100 , int(( success_count / len(observed_youtube_video_ads)) * 100))
-    #     log.warning(log1)
-    #     log.warning(log2)
-    #     warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
-    # elif len(observed_youtube_video_ads) > 0 and DURATION_PER_VIDEO_WARN_THRESHOLD < (duration / len(observed_youtube_video_ads)).total_seconds(): 
-    #     warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD, (duration / len(observed_youtube_video_ads)).total_seconds())
-    #     log.warning(log1)
-    #     log.warning(log2)
-
-    #     warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
-    # else:
-    #     log.info(log1)
-    #     log.info(log2)
-    #     info_to_slack("Google ads: " + log1 + '\n' + log2 + '\n')
-
-
 
 if __name__ == "__main__":
     scrape_new_ads()
