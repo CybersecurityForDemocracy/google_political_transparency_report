@@ -1,5 +1,6 @@
 youtube_dl
 psycopg2
+sqlalchemy==1.3
 records
 webvtt-py
 python-dotenv
