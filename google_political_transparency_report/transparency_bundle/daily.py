@@ -9,7 +9,7 @@ from io import TextIOWrapper, BytesIO
 import logging
 import tempfile
 
-from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, upload_advertiser_stats_from_bundle, get_advertiser_weekly_spend_csv, get_creative_stats_csv, get_advertiser_stats_csv, get_bundle_date
+from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, upload_advertiser_stats_from_bundle, get_advertiser_weekly_spend_csv, get_creative_stats_csv, get_advertiser_stats_csv, get_bundle_date, get_advertiser_regional_spend_csv, upload_advertiser_regional_stats_from_bundle
 from google_political_transparency_report.transparency_bundle.load_advertiser_weekly_spend import load_advertiser_weekly_spend_to_db
 from google_political_transparency_report.transparency_bundle.load_advertiser_stats import load_advertiser_stats_to_db
 from google_political_transparency_report.transparency_bundle.load_creative_stats import load_creative_stats_to_db
@@ -28,10 +28,11 @@ if __name__ == "__main__":
             with get_current_bundle() as zip_file:
                 bundle_date = get_bundle_date(zip_file)
                 upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)
+                upload_advertiser_regional_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)
                 load_advertiser_weekly_spend_to_db(TextIOWrapper(BytesIO(get_advertiser_weekly_spend_csv(zip_file))))
                 load_advertiser_stats_to_db(TextIOWrapper(BytesIO(get_advertiser_stats_csv(zip_file))), bundle_date)
                 load_creative_stats_to_db(TextIOWrapper(BytesIO(get_creative_stats_csv(zip_file))), bundle_date)
-                load_advertiser_regional_spend_to_db(TextIOWrapper(BytesIO(get_creative_stats_csv(zip_file))), bundle_date)
+                load_advertiser_regional_spend_to_db(TextIOWrapper(BytesIO(get_advertiser_regional_spend_csv(zip_file))), bundle_date)
     except Exception as e:
         warn_to_slack(f"google_political_transparency_report.transparency_bundle.daily error: {e}")
         log.error(e)

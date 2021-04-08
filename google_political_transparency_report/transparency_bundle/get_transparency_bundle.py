@@ -49,6 +49,12 @@ def write_advertiser_stats_to_disk(dest, csv, update_date):
     with open(dest, 'wb') as f:
         f.write(csv)
 
+def write_advertiser_regional_stats_to_disk(dest, csv, update_date):
+    filename = "google-political-ads-advertiser-regional-stats-{}.csv".format(update_date)
+    dest = os.path.join(dest, filename)
+    with open(dest, 'wb') as f:
+        f.write(csv)
+
 
 def get_current_bundle():
     """ downloads the zip file from the Google Political Transpareny Report
@@ -87,9 +93,16 @@ def upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_
     write_advertiser_stats_to_disk(local_dest_for_bundle, advertiser_stats_csv, bundle_date)
     upload_csv_to_gcs("google-political-ads-advertiser-stats-{}.csv".format(bundle_date), advertiser_stats_csv)
 
+def upload_advertiser_regional_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date):
+    advertiser_regional_stats_csv = get_advertiser_regional_spend_csv(zip_file)
+    write_current_bundle_to_disk(local_dest_for_bundle, zip_file, bundle_date)
+    write_advertiser_regional_stats_to_disk(local_dest_for_bundle, advertiser_regional_stats_csv, bundle_date)
+    upload_csv_to_gcs("google-political-ads-advertiser-regional-stats-{}.csv".format(bundle_date), advertiser_regional_stats_csv)
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as local_dest_for_bundle:
     # local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', '..', 'data') # TODO: should use a tmpdir.
       with get_current_bundle() as zip_file:
           bundle_date = get_bundle_date(zip_file)        
           upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)
+          upload_advertiser_regional_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)
