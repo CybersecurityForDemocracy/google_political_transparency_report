@@ -165,6 +165,46 @@ class YouTubeVideoScraper:
         duration = datetime.now() - start_time
         return duration, success_count, error_count, unavailable_count, private_count
 
+    def parse_webvtt_subtitles_to_text(subtitle_data):
+        """
+        
+            Return values: 
+                subtitles, as a text string
+                retryable_error, boolean: if we should discard this and try again later (e.g. a weird network error or rate-limiting)
+                non-rettryable_error, boolean: if we shouldn't retry, e.g. because there were no subtitles
+
+        """
+        if subtitle_data and SUBTITLE_RATE_LIMIT_STRING in subtitle_data:
+            return None, False, True
+        elif subtitle_data:
+            subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data)) if caption.text.strip() != '']
+            subtitle_lines_deduped = [subtitle_lines[0]]
+            for line_a, line_b in zip(subtitle_lines[:-1], subtitle_lines[1:]):
+                if line_a not in line_b:
+                    subtitle_lines_deduped.append(line_b)
+            subs = '\n'.join(subtitle_lines_deduped)
+            log.info("subtitles found for {}".format(youtube_ad_id))
+            return subs, False, False
+        else:
+            log.info("no subtitles found {}".format(youtube_ad_id))               
+            subs = None
+            return subs, True, False
+
+
+    def get_subtitles(subtitles_url, proxy=None):
+        try:
+            subtitle_data = requests.get(video['requested_subtitles']['en']['url'], stream=True, 
+                proxies=dict(http=self.ydl_arguments["proxy"],
+                             https=self.ydl_arguments["proxy"])).text
+            subs, retryable_error, non_retryable_error = parse_webvtt_subtitles_to_text(subtitle_data)
+        except requests.exceptions.ConnectionError:
+            # sometimes the proxy fails?? we should just bail out in a retryable way.
+            subs = None
+            retryable_error = True
+            non_retryable_error = False
+        return subs, retryable_error, non_retryable_error
+
+
     def get_ad_video_info(self, youtube_ad_id):
         retried = False
         while True:
@@ -215,37 +255,29 @@ class YouTubeVideoScraper:
                         continue
 
             if video['requested_subtitles'] and "en" in video['requested_subtitles']:
-                subtitle_data = requests.get(video['requested_subtitles']['en']['url'], stream=True, 
-                    proxies=dict(http=self.ydl_arguments["proxy"],
-                                 https=self.ydl_arguments["proxy"])).text
+                subs, retryable_error, non_retryable_error = get_subtitles(video['requested_subtitles']['en']['url'])
                 subtitle_lang = "en"
+                break
             elif video['requested_subtitles'] and "es" in video['requested_subtitles']:
-                subtitle_data = requests.get(video['requested_subtitles']['es']['url'], stream=True, 
-                    proxies=dict(http=self.ydl_arguments["proxy"],
-                                 https=self.ydl_arguments["proxy"])).text
+                subs, retryable_error, non_retryable_error = get_subtitles(video['requested_subtitles']['es']['url'])
                 subtitle_lang = "es"
+                break
             else:
-                subtitle_data = None
-                subtitle_lang = None
-
-            if subtitle_data and SUBTITLE_RATE_LIMIT_STRING in subtitle_data:
-                video_data = {"error": True, "video_unavailable": False, "video_private": False}
-                self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
-                log.info("subtitle query was rate-limited for {}".format(youtube_ad_id))
-                return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
-            elif subtitle_data:
-                subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data)) if caption.text.strip() != '']
-                subtitle_lines_deduped = [subtitle_lines[0]]
-                for line_a, line_b in zip(subtitle_lines[:-1], subtitle_lines[1:]):
-                    if line_a not in line_b:
-                        subtitle_lines_deduped.append(line_b)
-                subs = '\n'.join(subtitle_lines_deduped)
-                log.info("subtitles found for {}".format(youtube_ad_id))                
-            else:
-                log.info("no subtitles found {}".format(youtube_ad_id))                
                 subs = None
+                subtitle_lang = None
+                retryable_error = False
+                non_retryable_error = True
+                break
 
-
+        if retryable_error:
+            # don't write anything to the DB.
+            return True, False, False
+        if non_retryable_error:
+            video_data = {"error": True, "video_unavailable": False, "video_private": False}
+            self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
+            log.info("subtitle query was rate-limited for {}".format(youtube_ad_id))
+            return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
+        else:
             video_data = {**{k:None for k in KEYS}, **{k:v for k,v in video.items() if k in KEYS}}
             video_data["subs"] = subs
             video_data["subtitle_lang"] = subtitle_lang
@@ -259,7 +291,6 @@ class YouTubeVideoScraper:
 
             self.db.query(INSERT_QUERY, **video_data)
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
-            break
 
 
 def scrape_new_ads():
@@ -296,7 +327,7 @@ def scrape_new_ads():
         log.warning(log2)
         warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
     elif total_attempted > 0 and DURATION_PER_VIDEO_WARN_THRESHOLD < (duration / total_attempted).total_seconds(): 
-        warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD,  (duration / len(total_attempted)).total_seconds())
+        warn_msg = "youtube video fetch time more than expected. (expected: <= {}, got: {}) ".format(DURATION_PER_VIDEO_WARN_THRESHOLD,  (duration / total_attempted).total_seconds())
         log.warning(log1)
         log.warning(log2)
         warn_to_slack("Google ads: " + log1 + '\n' + log2 + '\n' + warn_msg)
