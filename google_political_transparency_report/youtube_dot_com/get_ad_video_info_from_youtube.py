@@ -60,6 +60,8 @@ KEYS = [
     "video_private"
 ]
 INSERT_QUERY = "INSERT INTO youtube_videos ({}) VALUES ({})  ON CONFLICT (id) DO UPDATE SET {}".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]), ', '.join([f"{k} = :{k}" for k in KEYS]))
+INSERT_SUBS_QUERY = "INSERT INTO youtube_video_subs ({}) VALUES ({})  ON CONFLICT (id) DO UPDATE SET {}".format(', '.join([k for k in ["id", "subs", "subtitle_lang", "asr"]]), ', '.join([":" + k for k in ["id", "subs", "subtitle_lang", "asr"]]), ', '.join([f"{k} = :{k}" for k in ["id", "subs", "subtitle_lang", "asr"]]))
+
 SUBTITLE_RATE_LIMIT_STRING = "your computer or network may be sending automated queries. To protect our users, we can't process your request right now";
 PROXY_ENV_VARS=["SOCKS5USERNAME", "SOCKS5PASSWORD", "SOCKS5PORT", "SOCKS5URLS"]
 
@@ -165,6 +167,7 @@ class YouTubeVideoScraper:
         duration = datetime.now() - start_time
         return duration, success_count, error_count, unavailable_count, private_count
 
+    @staticmethod
     def parse_webvtt_subtitles_to_text(subtitle_data):
         """
         
@@ -175,7 +178,8 @@ class YouTubeVideoScraper:
 
         """
         if subtitle_data and SUBTITLE_RATE_LIMIT_STRING in subtitle_data:
-            return None, False, True
+            log.info("subtitle_data {}".format(subtitle_data))
+            return None, True, False # if we're rate-limited, it's a retryable error
         elif subtitle_data:
             subtitle_lines = [caption.text for caption in webvtt.read_buffer(StringIO(subtitle_data)) if caption.text.strip() != '']
             subtitle_lines_deduped = [subtitle_lines[0]]
@@ -183,20 +187,18 @@ class YouTubeVideoScraper:
                 if line_a not in line_b:
                     subtitle_lines_deduped.append(line_b)
             subs = '\n'.join(subtitle_lines_deduped)
-            log.info("subtitles found for {}".format(youtube_ad_id))
             return subs, False, False
         else:
-            log.info("no subtitles found {}".format(youtube_ad_id))               
             subs = None
-            return subs, True, False
+            return subs, False, True # if there's no subtitle data, it's a non-retryable error
 
 
-    def get_subtitles(subtitles_url, proxy=None):
+    def get_subtitles(self, subtitles_url, proxy=None):
         try:
-            subtitle_data = requests.get(video['requested_subtitles']['en']['url'], stream=True, 
+            subtitle_data = requests.get(subtitles_url, stream=True, 
                 proxies=dict(http=self.ydl_arguments["proxy"],
                              https=self.ydl_arguments["proxy"])).text
-            subs, retryable_error, non_retryable_error = parse_webvtt_subtitles_to_text(subtitle_data)
+            subs, retryable_error, non_retryable_error = YouTubeVideoScraper.parse_webvtt_subtitles_to_text(subtitle_data)
         except requests.exceptions.ConnectionError:
             # sometimes the proxy fails?? we should just bail out in a retryable way.
             subs = None
@@ -207,12 +209,14 @@ class YouTubeVideoScraper:
 
     def get_ad_video_info(self, youtube_ad_id):
         retried = False
-        while True:
+        video = None
+        while True: # this while is just to be able to retry the fetch once if there's an error.
             try:
                 video = self.ydl.extract_info(
                     f'http://www.youtube.com/watch?v={youtube_ad_id}',
                     download=False # We just want to extract the info
                 )
+                break
             except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
                     # Videos can be unavailable for three reasons that I'm currently aware of:
                     #   1. private videos. We might eventually want to re-scrape these, but for now, we're not doing that. video_unavailable: True, video_private: True, error: False
@@ -239,7 +243,6 @@ class YouTubeVideoScraper:
                         # The uploader has not made this video available in your country
                         log.warn("unknown video fetching error, will retry: " +  repr(e))
                         return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
-
                     else:
                         if 'HTTP Error 429' in repr(e):
                             print('429, sleeping 2m')
@@ -254,33 +257,58 @@ class YouTubeVideoScraper:
                         retried = True
                         continue
 
-            if video['requested_subtitles'] and "en" in video['requested_subtitles']:
-                subs, retryable_error, non_retryable_error = get_subtitles(video['requested_subtitles']['en']['url'])
-                subtitle_lang = "en"
-                break
-            elif video['requested_subtitles'] and "es" in video['requested_subtitles']:
-                subs, retryable_error, non_retryable_error = get_subtitles(video['requested_subtitles']['es']['url'])
-                subtitle_lang = "es"
-                break
-            else:
-                subs = None
-                subtitle_lang = None
-                retryable_error = False
-                non_retryable_error = True
-                break
+
+            # "subtitles", if present, gives non-auto subs
+            # "requested_subtitles" is auto subs.
+            # "automatic_captions" is also auto subs.            
+            # the human-generated lacks "kind=asr" in the URL
+
+            # https://www.youtube.com/api/timedtext?v=PEMIxDjSRTQ&asr_langs=de%2Cen%2Ces%2Cfr%2Cit%2Cja%2Cko%2Cnl%2Cpt%2Cru&caps=asr&exp=xftt&xorp=true&xoaf=5&hl=en&ip=0.0.0.0&ipbits=0&expire=1619238985&sparams=ip%2Cipbits%2Cexpire%2Cv%2Casr_langs%2Ccaps%2Cexp%2Cxorp%2Cxoaf&signature=9D727597E5502ACD8B11C54632FACE7857F050D5.939502323CED10D7FAE99555F0A0B9FEB78CC460&key=yt8&kind=asr&lang=en&tlang=en&fmt=vtt
+            # https://www.youtube.com/api/timedtext?v=PEMIxDjSRTQ&asr_langs=de%2Cen%2Ces%2Cfr%2Cit%2Cja%2Cko%2Cnl%2Cpt%2Cru&caps=asr&exp=xftt&xorp=true&xoaf=5&hl=en&ip=0.0.0.0&ipbits=0&expire=1619238985&sparams=ip%2Cipbits%2Cexpire%2Cv%2Casr_langs%2Ccaps%2Cexp%2Cxorp%2Cxoaf&signature=9D727597E5502ACD8B11C54632FACE7857F050D5.939502323CED10D7FAE99555F0A0B9FEB78CC460&key=yt8&lang=en&fmt=vtt
+
+        has_any_subs = False
+        retryable_error = False
+        non_retryable_error = None
+        for lang in environ.get("YOUTUBE_SUBS_LANGUAGES", "en,es,de").split(","):
+            if video['requested_subtitles'] and lang in video['requested_subtitles']:
+                subs, subs_retryable_error, subs_non_retryable_error = self.get_subtitles(video['requested_subtitles'][lang]['url'])
+                non_retryable_error = (non_retryable_error is None) and subs_non_retryable_error
+                retryable_error = retryable_error or subs_retryable_error
+                has_any_subs = has_any_subs or not not subs 
+                subtitle_lang = lang
+                asr = True
+                if not subs_retryable_error and not subs_non_retryable_error:
+                    self.handle_subtitle_data(youtube_ad_id, subs, subtitle_lang, asr)
+            if "subtitles" in video and video["subtitles"] and lang in video["subtitles"]:
+                subs, subs_retryable_error, subs_non_retryable_error = self.get_subtitles([obj for obj in video['subtitles'][lang] if obj["ext"] == "vtt"][0]['url'])
+                non_retryable_error = (non_retryable_error is None) and subs_non_retryable_error
+                retryable_error = retryable_error or subs_retryable_error      
+                has_any_subs = has_any_subs or not not subs                                   
+                subtitle_lang = lang
+                asr = False
+                if not subs_retryable_error and not subs_non_retryable_error:
+                    self.handle_subtitle_data(youtube_ad_id, subs, subtitle_lang, asr)
+        if not has_any_subs:
+            subs = None
+            subtitle_lang = None
+            retryable_error = False
+            non_retryable_error = False
 
         if retryable_error:
             # don't write anything to the DB.
+            log.info("subtitle query was rate-limited for {}".format(youtube_ad_id))            
             return True, False, False
-        if non_retryable_error:
+        elif non_retryable_error:
             video_data = {"error": True, "video_unavailable": False, "video_private": False}
+            log.info("non-retryable error for {}".format(youtube_ad_id))
             self.db.query(INSERT_QUERY, **{**{k: None for k in KEYS}, **{"id": youtube_ad_id}, **video_data})
-            log.info("subtitle query was rate-limited for {}".format(youtube_ad_id))
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
         else:
+            if has_any_subs:
+                log.info("subtitles found for {}".format(youtube_ad_id))
+            else:
+                log.info("no subtitles found {}".format(youtube_ad_id))
             video_data = {**{k:None for k in KEYS}, **{k:v for k,v in video.items() if k in KEYS}}
-            video_data["subs"] = subs
-            video_data["subtitle_lang"] = subtitle_lang
             video_data["error"] = False
             video_data["video_unavailable"] = False
             video_data["video_private"] = False
@@ -292,6 +320,8 @@ class YouTubeVideoScraper:
             self.db.query(INSERT_QUERY, **video_data)
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
 
+    def handle_subtitle_data(self, youtube_ad_id, subs, subtitle_lang, asr):
+        self.db.query(INSERT_SUBS_QUERY, **{"id": youtube_ad_id, "subs": subs, "subtitle_lang": subtitle_lang, "asr": asr})
 
 def scrape_new_ads():
     ydl_args = {
@@ -300,7 +330,7 @@ def scrape_new_ads():
         'subtitleslangs': ['en'],
     }
 
-    factory = YouTubeVideoScraperFactory(ydl_args, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER, proxy_urls=environ.get("SOCKS5URLS", []).split(","), scrape_locally_too=True)
+    factory = YouTubeVideoScraperFactory(ydl_args, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER, proxy_urls=environ.get("SOCKS5URLS", "").split(","), scrape_locally_too=True)
 
     # garbage below.
 

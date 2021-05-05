@@ -111,6 +111,18 @@ USING gin((setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::re
        setweight(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs), 'B')));
 alter table youtube_videos add primary key (id);
 
+CREATE TABLE youtube_video_subs (
+    id character varying NOT NULL,
+    subs text,
+    subtitle_lang character varying,
+    asr boolean
+);
+alter table youtube_video_subs add primary key (id);
+CREATE INDEX idx_fts_youtube_videos ON youtube_video_subs 
+USING gin(to_tsvector(CASE subtitle_lang WHEN 'en' THEN 'english'::regconfig WHEN 'es' THEN 'spanish'::regconfig ELSE 'english'::regconfig END, subs));
+-- run just once.
+-- INSERT INTO youtube_video_subs SELECT id, subs, subtitle_lang, true FROM youtube_videos;
+
 
 CREATE SERVER observations 
  FOREIGN DATA WRAPPER postgres_fdw
