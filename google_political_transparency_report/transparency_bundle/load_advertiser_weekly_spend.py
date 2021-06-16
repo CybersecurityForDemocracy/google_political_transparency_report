@@ -37,11 +37,10 @@ def load_advertiser_weekly_spend_to_db(csv_filelike):
     total_rows = 0
     start_time = datetime.now()
     for row in  agate.Table.from_csv(csv_filelike):
-        if not row["Election_Cycle"] or ('US-Federal' not in row["Election_Cycle"]):
-            continue
         ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
         ad_data["spend_usd"] = ad_data["spend_usd"] or 0
         total_rows += 1
+        print(ad_data)
         DB.query(INSERT_QUERY, **ad_data)
     duration = (datetime.now() - start_time)
     log1 = "loaded {} advertiser weekly spend records for this week in {}".format(total_rows , formattimedelta(duration))

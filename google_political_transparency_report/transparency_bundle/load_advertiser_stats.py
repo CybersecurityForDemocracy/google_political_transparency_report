@@ -41,7 +41,7 @@ def load_advertiser_stats_to_db(csvfn, date):
     total_rows = 0
     start_time = datetime.now()
     for row in  agate.Table.from_csv(csvfn):
-        if not row["Elections"]  or row["Elections"] != 'US-Federal':
+        if not row["Elections"] or (row["Elections"] != 'US-Federal' and row["Elections"] != 'EU-Parliament'):
             continue
         ad_data = {k.lower():v for k,v in row.items() if k.lower() in KEYS}
         ad_data["spend_usd"] = ad_data["spend_usd"] or 0
