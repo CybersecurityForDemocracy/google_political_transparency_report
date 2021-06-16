@@ -53,8 +53,8 @@ KEYS = [
     "resolution", 
     "fps", 
     # "fulltitle", 
-    "subs",
-    "subtitle_lang",
+    # "subs", # don't write subs anymore, since it's handled by youtube_video_subs
+    # "subtitle_lang", # don't write subs anymore, since it's handled by youtube_video_subs
     "error",
     "video_unavailable",
     "video_private"
@@ -98,9 +98,9 @@ class YouTubeVideoScraperFactory():
     def new_ads_from_ad_observer(self):
         return self.db.query("""
             select distinct platformitemid as youtube_ad_id
-            from observed_youtube_ads
+            from observations.youtube_ads
             left outer join youtube_videos 
-            on youtube_videos.id = observed_youtube_ads.platformitemid 
+            on youtube_videos.id = observations.youtube_ads.platformitemid 
             where (youtube_videos.id is null or (youtube_videos.error = true)) and itemtype != 'recommendedVideo'
             """)
 

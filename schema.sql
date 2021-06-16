@@ -134,53 +134,53 @@ CREATE SERVER observations
 -- OPTIONS (user 'CENSORED', password 'CENSORED');
 
 
-CREATE FOREIGN TABLE observed_youtube_ads (
-        id varchar(16),
-        video boolean,
-        time_of_day boolean,
-        general_location  boolean,
-        activity boolean,
-        similarity boolean,
-        age boolean,
-        interests_estimation boolean,
-        general_location_estimation boolean,
-        gender boolean,
-        income_estimation boolean,
-        parental_status_estimation boolean,
-        websites_youve_visited boolean,
-        approximate_location boolean,
-        activity_eg_searches boolean,
-        website_topics boolean,
-        age_estimation boolean,
-        gender_estimation boolean,
+-- CREATE FOREIGN TABLE observed_youtube_ads (
+--         id varchar(16),
+--         video boolean,
+--         time_of_day boolean,
+--         general_location  boolean,
+--         activity boolean,
+--         similarity boolean,
+--         age boolean,
+--         interests_estimation boolean,
+--         general_location_estimation boolean,
+--         gender boolean,
+--         income_estimation boolean,
+--         parental_status_estimation boolean,
+--         websites_youve_visited boolean,
+--         approximate_location boolean,
+--         activity_eg_searches boolean,
+--         website_topics boolean,
+--         age_estimation boolean,
+--         gender_estimation boolean,
 
 
-        title text,
-        paid_for_by text,
-        targeting_on boolean,
-        advertiser text,
-        itemType text,
-        itemId text,
-        platformItemId text,
-        observedAt timestamp,
-        hostVideoId text,
-        hostVideoUrl text,
-        hostVideoChannelId text,
-        hostVideoAuthor text,
-        hostVideoTitle text,
-        creative text,
-        reasons text,
-        lang text,
-        homeownership_status_estimation boolean,
-        company_size_estimation boolean,
-        job_industry_estimation boolean,
-        marital_status_estimation boolean,
-        education_status_estimation boolean,
-        visit_to_advertisers_website_or_app boolean,
-        search_terms boolean
-  )
-SERVER observations
-OPTIONS (schema_name 'observations', table_name 'youtube_ads')
+--         title text,
+--         paid_for_by text,
+--         targeting_on boolean,
+--         advertiser text,
+--         itemType text,
+--         itemId text,
+--         platformItemId text,
+--         observedAt timestamp,
+--         hostVideoId text,
+--         hostVideoUrl text,
+--         hostVideoChannelId text,
+--         hostVideoAuthor text,
+--         hostVideoTitle text,
+--         creative text,
+--         reasons text,
+--         lang text,
+--         homeownership_status_estimation boolean,
+--         company_size_estimation boolean,
+--         job_industry_estimation boolean,
+--         marital_status_estimation boolean,
+--         education_status_estimation boolean,
+--         visit_to_advertisers_website_or_app boolean,
+--         search_terms boolean
+--   )
+-- SERVER observations
+-- OPTIONS (schema_name 'observations', table_name 'youtube_ads')
 
 
 create table models (model_id serial PRIMARY KEY, created_at timestamptz default now(), location text, model_name text, vocab_path text, encoder_path text);

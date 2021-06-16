@@ -94,9 +94,9 @@ will find ads whose subs or title contain "Biden" but which don't appear to have
 
 ```
 select 
-        youtube_videos.id, youtube_videos.description, observed_youtube_ads.title, uploader, youtube_videos.title, alt_title, fulltitle 
-    from observed_youtube_ads 
-    join youtube_videos on observed_youtube_ads.platformitemid = youtube_videos.id 
+        youtube_videos.id, youtube_videos.description, observations.youtube_ads.title, uploader, youtube_videos.title, alt_title, fulltitle 
+    from observations.youtube_ads 
+    join youtube_videos on observations.youtube_ads.platformitemid = youtube_videos.id 
     left outer join google_ad_creatives on platformitemid = youtube_ad_id 
     where google_ad_creatives.youtube_ad_id is null 
       and paid_for_by = ''     
@@ -105,7 +105,7 @@ select
 
 YouTube ads seen by the collector for which we've scraped video info:
 
-```select sum(CASE WHEN subs_not_null THEN 1 ELSE 0 END), count(*) as total from (select distinct youtube_videos.id, subs is not null subs_not_null from youtube_videos join observed_youtube_ads on  youtube_videos.id = platformItemId where itemtype != 'recommendedVideo') q;```
+```select sum(CASE WHEN subs_not_null THEN 1 ELSE 0 END), count(*) as total from (select distinct youtube_videos.id, subs is not null subs_not_null from youtube_videos join observations.youtube_ads on  youtube_videos.id = platformItemId where itemtype != 'recommendedVideo') q;```
 
 on 12/9/2020:
 ```
