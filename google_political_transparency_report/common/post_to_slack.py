@@ -12,4 +12,4 @@ def post_to_slack(msg):
 
 def warn_to_slack(msg):
     if environ.get("SLACKWARNWH"):
-        requests.post(environ.get("SLACKWARNWH"), data=json.dumps({"text": '🚨 <@UBZC2ATRN>' + msg}), headers={"Content-Type": "application/json"})
+        requests.post(environ.get("SLACKWARNWH"), data=json.dumps({"text": '🚨 <@USBJ9RKAM>' + msg}), headers={"Content-Type": "application/json"})
