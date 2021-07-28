@@ -1,4 +1,5 @@
 import os
+import sys
 import csv
 from time import sleep
 from urllib.parse import urljoin, urlparse, parse_qs
@@ -14,7 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from dotenv import load_dotenv
 
-load_dotenv()
+#  load_dotenv()
 import records
 
 from ..common.post_to_slack import info_to_slack, warn_to_slack
@@ -25,7 +26,7 @@ log = logging.getLogger(
     "google_political_transparency_report.youtube_dot_com.get_ad_video_info"
 )
 
-DB = records.Database()
+#  DB = records.Database()
 
 AD_DATA_KEYS = [
     "ad_id",
@@ -543,21 +544,21 @@ def running_update_of_all_advertisers():
         info_to_slack("Google ads: " + log_msg)
 
 
-SCRAPE_ONE_ADVERTISER_TO_DB = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
-SCRAPE_ONE_ADVERTISER_TO_CSV = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
-BACKFILL_EMPTY_ADVERTISERS = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
-if __name__ == "__main__":
-    if SCRAPE_ONE_ADVERTISER_TO_CSV:
-        advertiser_id = SCRAPE_ONE_ADVERTISER_TO_CSV  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+def main():
+    scrape_one_advertiser_to_db = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
+    scrape_one_advertiser_to_csv = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
+    backfill_empty_advertisers = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
+    if scrape_one_advertiser_to_csv:
+        advertiser_id = scrape_one_advertiser_to_csv  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
         start_date = date(2020, 1, 1)
         end_date = date.today()  # date(2020, 9, 1)
         scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date)
-    if SCRAPE_ONE_ADVERTISER_TO_DB:
-        advertiser_id = SCRAPE_ONE_ADVERTISER_TO_DB  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+    if scrape_one_advertiser_to_db:
+        advertiser_id = scrape_one_advertiser_to_db  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
         start_date = date(2020, 1, 1)
         end_date = date.today()
         scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date)
-    elif BACKFILL_EMPTY_ADVERTISERS:
+    elif backfill_empty_advertisers:
         log.info("backfilling empty advertisers")
         # start_date = date(2020, 5, 1)
         # end_date = date(2020, 9, 2)
@@ -569,3 +570,12 @@ if __name__ == "__main__":
     else:
         # on a daily basis
         running_update_of_all_advertisers()
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
+    # TODO(macpd): move this out of global scope
+    DB = records.Database()
+    main()
