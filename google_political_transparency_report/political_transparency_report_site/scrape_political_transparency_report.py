@@ -8,6 +8,7 @@ import logging
 
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.utils import ChromeType
 from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
@@ -58,11 +59,8 @@ def write_row_to_db(ad_data):
 
 
 TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE = "https://transparencyreport.google.com/political-ads/advertiser/{}?campaign_creatives=start:{};end:{};spend:;impressions:;type:;sort:3&lu=campaign_creatives"
-CHROMEDRIVER_PATH = '/usr/bin/chromedriver'
-CHROME_BROWSER_PATH = '/usr/bin/chromium-browser'
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument("--headless")
-CHROME_OPTIONS.binary_location = CHROME_BROWSER_PATH
 
 
 def is_image_iframe_ad(ad):
@@ -177,8 +175,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
     while True:
         try:
             driver = webdriver.Chrome(
-                ChromeDriverManager().install(), options=CHROME_OPTIONS,
-                executable_path=CHROMEDRIVER_PATH
+                ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install(),
+                options=CHROME_OPTIONS
             )
 
             driver.get(
