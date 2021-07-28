@@ -576,6 +576,7 @@ if __name__ == "__main__":
         print('USAGE: {} <env file path>')
         sys.exit(1)
     load_dotenv(sys.argv[1])
+    logging.info('ENV: %r', os.environ)
     # TODO(macpd): move this out of global scope
     DB = records.Database(os.environ['DATABASE_URL'])
     main()
