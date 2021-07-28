@@ -61,6 +61,8 @@ def write_row_to_db(ad_data):
 TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE = "https://transparencyreport.google.com/political-ads/advertiser/{}?campaign_creatives=start:{};end:{};spend:;impressions:;type:;sort:3&lu=campaign_creatives"
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument("--headless")
+CHROME_OPTIONS.add_argument("--disable-dev-shm-usage")
+CHROME_OPTIONS.add_argument("--disable-gpu")
 
 
 def is_image_iframe_ad(ad):
@@ -385,7 +387,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                     sleep(2)
                 except NoSuchElementException:
                     break
-        except WebDriverException:
+        except WebDriverException as e:
+            logging.warning('%r', e)
             pass  # retry
         else:
             return  # we're done if we didn't get a WebDriverException
