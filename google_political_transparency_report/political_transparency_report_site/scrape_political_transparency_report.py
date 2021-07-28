@@ -577,5 +577,5 @@ if __name__ == "__main__":
         sys.exit(1)
     load_dotenv(sys.argv[1])
     # TODO(macpd): move this out of global scope
-    DB = records.Database()
+    DB = records.Database(os.environ['DATABASE_URL'])
     main()
