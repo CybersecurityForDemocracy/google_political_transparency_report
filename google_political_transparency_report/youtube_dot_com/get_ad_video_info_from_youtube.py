@@ -1,4 +1,3 @@
-
 import csv
 from io import StringIO
 from time import sleep
@@ -70,7 +69,7 @@ COUNT_TO_SCRAPE_PER_SCRAPER= 20
 class RateLimitedOrBlockedException(Exception): pass
 
 def get_database_connection(): 
-    return records.Database()
+    return records.Database(environ['DATABASE_URL'])
 
 
 class YouTubeVideoScraperFactory():
