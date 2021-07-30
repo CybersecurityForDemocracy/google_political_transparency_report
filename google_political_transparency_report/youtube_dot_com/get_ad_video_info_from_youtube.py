@@ -317,7 +317,11 @@ class YouTubeVideoScraper:
             if video_data["upload_date"]:
                 video_data["upload_date"] = str(video_data["upload_date"])
 
-            self.db.query(INSERT_QUERY, **video_data)
+            try:
+                self.db.query(INSERT_QUERY, **video_data)
+            except ValueError as e:
+                logging.error('%r trying to insert video_data: %r', e, video_data)
+                raise
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
 
     def handle_subtitle_data(self, youtube_ad_id, subs, subtitle_lang, asr):
