@@ -11,7 +11,6 @@ import requests
 import webvtt
 import youtube_dl
 from dotenv import load_dotenv
-load_dotenv()
 import records
 
 from ..common.post_to_slack import info_to_slack, warn_to_slack
@@ -371,4 +370,8 @@ def scrape_new_ads():
         info_to_slack("Google ads: " + log1 + '\n' + log2)
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
     scrape_new_ads()
