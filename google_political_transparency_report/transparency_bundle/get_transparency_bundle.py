@@ -1,13 +1,3 @@
-import requests
-import datetime
-import os
-from zipfile import ZipFile 
-from dotenv import load_dotenv
-from io import BytesIO
-import tempfile
-
-load_dotenv()
-
 """
     the Google Political Transparency Bundle contains 9 CSVs:
 
@@ -25,6 +15,14 @@ load_dotenv()
     we don't want to save all of them, since they tend to be duplicative.
 """
 
+import requests
+import datetime
+import os
+from zipfile import ZipFile
+from io import BytesIO
+import tempfile
+import sys
+from dotenv import load_dotenv
 
 from google.cloud import storage
 
