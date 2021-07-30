@@ -98,9 +98,13 @@ def upload_advertiser_regional_stats_from_bundle(zip_file, local_dest_for_bundle
     upload_csv_to_gcs("google-political-ads-advertiser-regional-stats-{}.csv".format(bundle_date), advertiser_regional_stats_csv)
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
     with tempfile.TemporaryDirectory() as local_dest_for_bundle:
     # local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', '..', 'data') # TODO: should use a tmpdir.
       with get_current_bundle() as zip_file:
-          bundle_date = get_bundle_date(zip_file)        
+          bundle_date = get_bundle_date(zip_file)
           upload_advertiser_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)
           upload_advertiser_regional_stats_from_bundle(zip_file, local_dest_for_bundle, bundle_date)

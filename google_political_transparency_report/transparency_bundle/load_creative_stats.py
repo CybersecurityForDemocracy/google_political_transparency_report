@@ -6,14 +6,12 @@ the goal is to *sync* the DB with the CSV, rather than to maintain diffs. that's
 """
 
 import agate
-from dotenv import load_dotenv
 
 import os
 from io import TextIOWrapper, BytesIO
 from datetime import datetime, timedelta, date
 import logging
 
-load_dotenv()
 import records
 
 from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, get_zip_file_by_name, get_bundle_date, get_creative_stats_csv
@@ -22,8 +20,6 @@ from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.transparency_bundle.creative_stats")
-
-DB = records.Database()
 
 KEYS = [
     "ad_id",
@@ -92,6 +88,8 @@ OLD_CREATIVE_STATS_COLUMN_TYPES = {'Ad_ID': agate.Text(), 'Ad_URL': agate.Text()
 CREATIVE_STATS_SCHEMA_CHANGE_DATE = date(2020, 7, 1) # it's sometime around here, I don't know for sure, that the schema changes
 
 def load_creative_stats_to_db(csvfn, report_date):
+    DB = records.Database(os.environ['DATABASE_URL'])
+
     # should log: duration, total rows; New today; here yesterday, gone today.
     total_rows_today = 0
 
