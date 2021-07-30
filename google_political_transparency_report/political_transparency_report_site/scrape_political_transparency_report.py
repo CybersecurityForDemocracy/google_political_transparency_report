@@ -63,6 +63,8 @@ CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument("--headless")
 CHROME_OPTIONS.add_argument("--disable-dev-shm-usage")
 CHROME_OPTIONS.add_argument("--disable-gpu")
+CHROME_OPTIONS.add_argument("--disable-accelerated-video-decode")
+CHROME_OPTIONS.add_argument("--use-gl=desktop")
 
 
 def is_image_iframe_ad(ad):
