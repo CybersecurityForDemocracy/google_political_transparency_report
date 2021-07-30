@@ -23,7 +23,7 @@ from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(
-    "google_political_transparency_report.youtube_dot_com.get_ad_video_info"
+    "google_political_transparency_report.political_transparency_report_site.scrape_political_transparency_report"
 )
 
 #  DB = records.Database()
