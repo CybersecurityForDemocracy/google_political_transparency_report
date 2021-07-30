@@ -15,7 +15,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from dotenv import load_dotenv
 
-#  load_dotenv()
 import records
 
 from ..common.post_to_slack import info_to_slack, warn_to_slack
@@ -25,8 +24,6 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(
     "google_political_transparency_report.political_transparency_report_site.scrape_political_transparency_report"
 )
-
-#  DB = records.Database()
 
 AD_DATA_KEYS = [
     "ad_id",
