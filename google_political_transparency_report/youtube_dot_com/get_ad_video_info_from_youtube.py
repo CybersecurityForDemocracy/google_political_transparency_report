@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 from os import environ
 from random import shuffle 
+import sys
 
 import requests
 import webvtt
