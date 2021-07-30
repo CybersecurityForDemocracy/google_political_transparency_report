@@ -77,10 +77,11 @@ class YouTubeVideoScraperFactory():
     """
         A YouTubeVideoScraperFactory creates YouTubeVideoScrapers, one each per proxy. The Factory keeps assigns records to scrape to each Scraper and then logs the results.
     """
-    def __init__(self,  ydl_arguments, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER, proxy_urls=[], scrape_locally_too=True):
+    def __init__(self,  ydl_arguments, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER,
+                 proxy_urls=None, scrape_locally_too=True):
         self.db = get_database_connection()
         self.ydl_arguments = ydl_arguments
-        self.available_proxies = proxy_urls + ([None] if scrape_locally_too else [])
+        self.available_proxies = (proxy_urls or []) + ([None] if scrape_locally_too else [])
         self.count_to_scrape_per_scraper = count_to_scrape_per_scraper
         shuffle(self.available_proxies)
 
@@ -246,10 +247,10 @@ class YouTubeVideoScraper:
                         if 'HTTP Error 429' in repr(e):
                             print('429, sleeping 2m')
                             sleep(120)
-                            raise RateLimitedOrBlockedException                          
+                            raise RateLimitedOrBlockedException from e
                         elif 'urlopen error [Errno 111] Connection refused' in repr(e):
                             print('connection refused')
-                            raise RateLimitedOrBlockedException
+                            raise RateLimitedOrBlockedException from e
                         else:
                             sleep(5)
                         print("retrying")
