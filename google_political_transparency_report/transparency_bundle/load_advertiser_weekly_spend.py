@@ -8,20 +8,16 @@ from datetime import datetime, timedelta
 from io import TextIOWrapper, BytesIO
 
 import agate
-from dotenv import load_dotenv
 
 from .get_transparency_bundle import get_current_bundle, get_bundle_date, get_advertiser_weekly_spend_csv
 from ..common.post_to_slack import info_to_slack
 from ..common.formattimedelta import formattimedelta
 
-load_dotenv()
 import records
 import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.transparency_bundle.advertiser_weekly_spend")
-
-DB = records.Database()
 
 KEYS = [
     'advertiser_id',
@@ -34,6 +30,7 @@ KEYS = [
 INSERT_QUERY = "INSERT INTO advertiser_weekly_spend ({}) VALUES ({}) ON CONFLICT (advertiser_id, week_start_date)  DO NOTHING".format(', '.join([k for k in KEYS]), ', '.join([":" + k for k in KEYS]))
 
 def load_advertiser_weekly_spend_to_db(csv_filelike):
+    DB = records.Database(os.environ['DATABASE_URL'])
     total_rows = 0
     start_time = datetime.now()
     for row in  agate.Table.from_csv(csv_filelike):

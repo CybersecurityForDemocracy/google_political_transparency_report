@@ -8,6 +8,8 @@ import os
 from io import TextIOWrapper, BytesIO
 import logging
 import tempfile
+import sys
+from dotenv import load_dotenv
 
 from google_political_transparency_report.transparency_bundle.get_transparency_bundle import get_current_bundle, upload_advertiser_stats_from_bundle, get_advertiser_weekly_spend_csv, get_creative_stats_csv, get_advertiser_stats_csv, get_bundle_date, get_advertiser_regional_spend_csv, upload_advertiser_regional_stats_from_bundle
 from google_political_transparency_report.transparency_bundle.load_advertiser_weekly_spend import load_advertiser_weekly_spend_to_db
@@ -22,6 +24,10 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.transparency_bundle.daily")
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
     try: 
         with tempfile.TemporaryDirectory() as local_dest_for_bundle:
         # local_dest_for_bundle = os.path.join(os.path.dirname(__file__), '..', '..', 'data')

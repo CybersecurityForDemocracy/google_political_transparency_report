@@ -1,4 +1,5 @@
 import os
+import sys
 import csv
 from time import sleep
 from urllib.parse import urljoin, urlparse, parse_qs
@@ -14,7 +15,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from dotenv import load_dotenv
 
-load_dotenv()
 import records
 
 from ..common.post_to_slack import info_to_slack, warn_to_slack
@@ -22,10 +22,8 @@ from ..common.formattimedelta import formattimedelta
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(
-    "google_political_transparency_report.youtube_dot_com.get_ad_video_info"
+    "google_political_transparency_report.political_transparency_report_site.scrape_political_transparency_report"
 )
-
-DB = records.Database()
 
 AD_DATA_KEYS = [
     "ad_id",
@@ -59,6 +57,10 @@ def write_row_to_db(ad_data):
 TRANSPARENCY_REPORT_PAGE_URL_TEMPLATE = "https://transparencyreport.google.com/political-ads/advertiser/{}?campaign_creatives=start:{};end:{};spend:;impressions:;type:;sort:3&lu=campaign_creatives"
 CHROME_OPTIONS = Options()
 CHROME_OPTIONS.add_argument("--headless")
+CHROME_OPTIONS.add_argument("--disable-dev-shm-usage")
+CHROME_OPTIONS.add_argument("--disable-gpu")
+CHROME_OPTIONS.add_argument("--disable-accelerated-video-decode")
+CHROME_OPTIONS.add_argument("--use-gl=desktop")
 
 
 def is_image_iframe_ad(ad):
@@ -173,7 +175,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
     while True:
         try:
             driver = webdriver.Chrome(
-                ChromeDriverManager().install(), options=CHROME_OPTIONS
+                ChromeDriverManager().install(),
+                options=CHROME_OPTIONS
             )
 
             driver.get(
@@ -382,7 +385,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                     sleep(2)
                 except NoSuchElementException:
                     break
-        except WebDriverException:
+        except WebDriverException as e:
+            logging.warning('%r', e)
             pass  # retry
         else:
             return  # we're done if we didn't get a WebDriverException
@@ -543,21 +547,21 @@ def running_update_of_all_advertisers():
         info_to_slack("Google ads: " + log_msg)
 
 
-SCRAPE_ONE_ADVERTISER_TO_DB = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
-SCRAPE_ONE_ADVERTISER_TO_CSV = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
-BACKFILL_EMPTY_ADVERTISERS = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
-if __name__ == "__main__":
-    if SCRAPE_ONE_ADVERTISER_TO_CSV:
-        advertiser_id = SCRAPE_ONE_ADVERTISER_TO_CSV  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+def main():
+    scrape_one_advertiser_to_db = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_DB", False)
+    scrape_one_advertiser_to_csv = os.environ.get("SCRAPE_ONE_ADVERTISER_TO_CSV", False)
+    backfill_empty_advertisers = os.environ.get("BACKFILL_EMPTY_ADVERTISERS", False)
+    if scrape_one_advertiser_to_csv:
+        advertiser_id = scrape_one_advertiser_to_csv  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
         start_date = date(2020, 1, 1)
         end_date = date.today()  # date(2020, 9, 1)
         scrape_individual_advertiser_to_csv(advertiser_id, start_date, end_date)
-    if SCRAPE_ONE_ADVERTISER_TO_DB:
-        advertiser_id = SCRAPE_ONE_ADVERTISER_TO_DB  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
+    if scrape_one_advertiser_to_db:
+        advertiser_id = scrape_one_advertiser_to_db  # TMAGAC: AR488306308034854912 ; DJT4P: AR105500339708362752
         start_date = date(2020, 1, 1)
         end_date = date.today()
         scrape_individual_advertiser_to_db(advertiser_id, start_date, end_date)
-    elif BACKFILL_EMPTY_ADVERTISERS:
+    elif backfill_empty_advertisers:
         log.info("backfilling empty advertisers")
         # start_date = date(2020, 5, 1)
         # end_date = date(2020, 9, 2)
@@ -569,3 +573,13 @@ if __name__ == "__main__":
     else:
         # on a daily basis
         running_update_of_all_advertisers()
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
+    logging.info('ENV: %r', os.environ)
+    # TODO(macpd): move this out of global scope
+    DB = records.Database(os.environ['DATABASE_URL'])
+    main()

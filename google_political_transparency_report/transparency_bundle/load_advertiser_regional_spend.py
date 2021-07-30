@@ -22,20 +22,17 @@ from datetime import datetime, timedelta
 from io import TextIOWrapper, BytesIO
 
 import agate
-from dotenv import load_dotenv
 
 from .get_transparency_bundle import get_current_bundle, get_bundle_date, get_advertiser_regional_spend_csv
 from ..common.post_to_slack import info_to_slack
 from ..common.formattimedelta import formattimedelta
 
-load_dotenv()
 import records
 import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("google_political_transparency_report.transparency_bundle.advertiser_regional_spend")
 
-DB = records.Database()
 
 KEYS = [
     "advertiser_id",
@@ -49,6 +46,7 @@ KEYS = [
 INSERT_QUERY = "INSERT INTO advertiser_regional_spend ({}) VALUES ({}) ON CONFLICT (advertiser_id, country, region, report_date)  DO NOTHING".format(', '.join([(k) for k in KEYS]), ', '.join([":" + (k) for k in KEYS]))
 
 def load_advertiser_regional_spend_to_db(csv_filelike, bundle_date):
+    DB = records.Database(os.environ['DATABASE_URL'])
     MAX_REPORT_DATE = DB.query("SELECT max(report_date) report_date FROM advertiser_regional_spend;")[0]["report_date"]
     if bundle_date == MAX_REPORT_DATE:
         return

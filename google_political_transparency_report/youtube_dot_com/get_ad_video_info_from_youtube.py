@@ -1,4 +1,3 @@
-
 import csv
 from io import StringIO
 from time import sleep
@@ -6,12 +5,12 @@ from datetime import datetime, timedelta
 import logging
 from os import environ
 from random import shuffle 
+import sys
 
 import requests
 import webvtt
 import youtube_dl
 from dotenv import load_dotenv
-load_dotenv()
 import records
 
 from ..common.post_to_slack import info_to_slack, warn_to_slack
@@ -71,17 +70,18 @@ COUNT_TO_SCRAPE_PER_SCRAPER= 20
 class RateLimitedOrBlockedException(Exception): pass
 
 def get_database_connection(): 
-    return records.Database()
+    return records.Database(environ['DATABASE_URL'])
 
 
 class YouTubeVideoScraperFactory():
     """
         A YouTubeVideoScraperFactory creates YouTubeVideoScrapers, one each per proxy. The Factory keeps assigns records to scrape to each Scraper and then logs the results.
     """
-    def __init__(self,  ydl_arguments, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER, proxy_urls=[], scrape_locally_too=True):
+    def __init__(self,  ydl_arguments, count_to_scrape_per_scraper=COUNT_TO_SCRAPE_PER_SCRAPER,
+                 proxy_urls=None, scrape_locally_too=True):
         self.db = get_database_connection()
         self.ydl_arguments = ydl_arguments
-        self.available_proxies = proxy_urls + ([None] if scrape_locally_too else [])
+        self.available_proxies = (proxy_urls or []) + ([None] if scrape_locally_too else [])
         self.count_to_scrape_per_scraper = count_to_scrape_per_scraper
         shuffle(self.available_proxies)
 
@@ -247,10 +247,10 @@ class YouTubeVideoScraper:
                         if 'HTTP Error 429' in repr(e):
                             print('429, sleeping 2m')
                             sleep(120)
-                            raise RateLimitedOrBlockedException                          
+                            raise RateLimitedOrBlockedException from e
                         elif 'urlopen error [Errno 111] Connection refused' in repr(e):
                             print('connection refused')
-                            raise RateLimitedOrBlockedException
+                            raise RateLimitedOrBlockedException from e
                         else:
                             sleep(5)
                         print("retrying")
@@ -317,7 +317,11 @@ class YouTubeVideoScraper:
             if video_data["upload_date"]:
                 video_data["upload_date"] = str(video_data["upload_date"])
 
-            self.db.query(INSERT_QUERY, **video_data)
+            try:
+                self.db.query(INSERT_QUERY, **video_data)
+            except ValueError as e:
+                logging.error('%r trying to insert video_data: %r', e, video_data)
+                raise
             return (video_data["error"], video_data["video_unavailable"], video_data["video_private"])
 
     def handle_subtitle_data(self, youtube_ad_id, subs, subtitle_lang, asr):
@@ -367,4 +371,8 @@ def scrape_new_ads():
         info_to_slack("Google ads: " + log1 + '\n' + log2)
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print('USAGE: {} <env file path>')
+        sys.exit(1)
+    load_dotenv(sys.argv[1])
     scrape_new_ads()
