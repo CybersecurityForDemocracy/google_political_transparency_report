@@ -9,6 +9,7 @@ import logging
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, WebDriverException
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
@@ -175,7 +176,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
     while True:
         try:
             driver = webdriver.Chrome(
-                ChromeDriverManager().install(),
+                service=Service(),
                 options=CHROME_OPTIONS
             )
 
@@ -390,6 +391,8 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             pass  # retry
         else:
             return  # we're done if we didn't get a WebDriverException
+        finally:
+            driver.quit()
 
 
 def backfill_empty_advertisers(start_date, end_date):
