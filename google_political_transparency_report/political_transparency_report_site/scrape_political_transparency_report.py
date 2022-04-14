@@ -9,6 +9,7 @@ import logging
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, WebDriverException
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -176,7 +177,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
     while True:
         try:
             driver = webdriver.Chrome(
-                ChromeDriverManager().install(),
+                service=Service(),
                 options=CHROME_OPTIONS
             )
 
