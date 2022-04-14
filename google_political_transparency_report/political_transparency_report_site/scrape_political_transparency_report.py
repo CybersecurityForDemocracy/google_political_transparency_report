@@ -10,6 +10,7 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as wait
@@ -65,7 +66,7 @@ CHROME_OPTIONS.add_argument("--use-gl=desktop")
 
 def is_image_iframe_ad(ad):
     try:
-        ad.find_element_by_tag_name("iframe")
+        ad.find_element(by=By.TAG_NAME, value="iframe")
         return True
     except NoSuchElementException:
         return False
@@ -73,7 +74,7 @@ def is_image_iframe_ad(ad):
 
 def is_image_img_ad(ad):
     try:
-        ad.find_element_by_tag_name("img")
+        ad.find_element(by=By.TAG_NAME, value="img")
         return True
     except NoSuchElementException:
         return False
@@ -81,7 +82,7 @@ def is_image_img_ad(ad):
 
 def is_youtube_video_ad(ad):
     try:
-        ad.find_element_by_css_selector("figure.video-preview")
+        ad.find_element(by=By.CSS_SELECTOR, value="figure.video-preview")
         return True
     except NoSuchElementException:
         return False
@@ -92,15 +93,15 @@ def is_other_video_ad(ad):
     on the search results page.
     """
     try:
-        ad.find_element_by_tag_name("unrenderable-ad")
-        return "Video ad" in ad.find_element_by_tag_name("figcaption").text
+        ad.find_element(by=By.TAG_NAME, value="unrenderable-ad")
+        return "Video ad" in ad.find_element(by=By.TAG_NAME, value="figcaption").text
     except NoSuchElementException:
         return False
 
 
 def is_text_ad(ad):
     try:
-        ad.find_element_by_tag_name("text-ad")
+        ad.find_element(by=By.TAG_NAME, value="text-ad")
         return True
     except NoSuchElementException:
         return False
@@ -109,7 +110,7 @@ def is_text_ad(ad):
 def is_image_and_text_ad(driver):
     """ driver is an iframe within the ad, not the ad itself """
     try:
-        driver.find_element_by_tag_name("canvas")
+        driver.find_element(by=By.TAG_NAME, value="canvas")
         return True
     except NoSuchElementException:
         return False
@@ -117,7 +118,7 @@ def is_image_and_text_ad(driver):
 
 def is_policy_violation(ad):
     try:
-        elem = ad.find_element_by_tag_name("unrenderable-ad")
+        elem = ad.find_element(by=By.TAG_NAME, value="unrenderable-ad")
         return "Policy violation" in elem.text
     except NoSuchElementException:
         return False
@@ -129,7 +130,7 @@ def is_gmail_ad(ad):
 
 def is_still_loading(ad):
     try:
-        ad.find_element_by_tag_name("mat-progress-spinner")
+        ad.find_element(by=By.TAG_NAME, value="mat-progress-spinner")
         return True
     except NoSuchElementException:
         return False
@@ -189,20 +190,20 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
             sleep(2)
             while True:
                 start_time = datetime.now()
-                ads = driver.find_elements_by_css_selector(
+                ads = driver.find_elements(by=By.CSS_SELECTOR, value=
                     "creative-preview:not(.alreadyprocessed)"
                 )
                 log.info("got {} ads".format(len(ads)))
                 if not ads:
                     sleep(10)
-                    ads = driver.find_elements_by_css_selector(
+                    ads = driver.find_elements(by=By.CSS_SELECTOR, value=
                         "creative-preview:not(.alreadyprocessed)"
                     )
                     log.info("got {} ads (second attempt)".format(len(ads)))
                     if not ads:
                         break
                 for i, ad in enumerate(ads):
-                    ad_detail_url = ad.find_element_by_tag_name("a").get_attribute(
+                    ad_detail_url = ad.find_element(by=By.TAG_NAME, value="a").get_attribute(
                         "href"
                     )
                     ad_id = ad_detail_url.split("/")[-1]
@@ -220,7 +221,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                         sleep(5)
                     if is_youtube_video_ad(ad):
                         try:
-                            img_url = ad.find_element_by_tag_name("img").get_attribute(
+                            img_url = ad.find_element(by=By.TAG_NAME, value="img").get_attribute(
                                 "src"
                             )
                         except NoSuchElementException:
@@ -246,15 +247,15 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                             "policy_violation_date": None,
                         }
                     elif is_text_ad(ad):
-                        ad_container = ad.find_element_by_tag_name("text-ad")
+                        ad_container = ad.find_element(by=By.TAG_NAME, value="text-ad")
                         remove_element(
                             driver,
-                            ad_container.find_element_by_css_selector(".ad-icon"),
+                            ad_container.find_element(by=By.CSS_SELECTOR, value=".ad-icon"),
                         )
                         text = "\n".join(
                             [
                                 div.text
-                                for div in ad_container.find_elements_by_css_selector(
+                                for div in ad_container.find_elements(by=By.CSS_SELECTOR, value=
                                     "div"
                                 )
                             ]
@@ -264,10 +265,10 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                         yield {"ad_id": ad_id, "text": text, "ad_type": ad_type}
                     elif is_image_img_ad(ad):
                         image_urls = None
-                        image_url = ad.find_element_by_tag_name("img").get_attribute(
+                        image_url = ad.find_element(by=By.TAG_NAME, value="img").get_attribute(
                             "src"
                         )
-                        destination = ad.find_element_by_tag_name("a").get_attribute(
+                        destination = ad.find_element(by=By.TAG_NAME, value="a").get_attribute(
                             "href"
                         )
                         parsed_destination = parse_qs(urlparse(destination).query)
@@ -291,38 +292,38 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                             "policy_violation_date": None,
                         }
                     elif is_image_iframe_ad(ad):
-                        iframe = driver.find_element_by_tag_name("iframe")
+                        iframe = driver.find_element(by=By.TAG_NAME, value="iframe")
                         iframe_url = iframe.get_attribute("src")
                         driver.switch_to.frame(iframe)
                         if is_image_and_text_ad(driver):
                             # image and text ad
-                            image_url = driver.find_element_by_tag_name(
+                            image_url = driver.find_element(by=By.TAG_NAME, value=
                                 "canvas"
                             ).value_of_css_property("background-url")
                             image_urls = None
                             try:
-                                destination = driver.find_element_by_tag_name(
+                                destination = driver.find_element(by=By.TAG_NAME, value=
                                     "a"
                                 ).get_attribute("href")
                                 # occasionally missing, e.g. https://transparencyreport.google.com/political-ads/advertiser/AR182710451392479232/creative/CR315072959679037440
                             except NoSuchElementException:
                                 destination = None
-                            ad_text = driver.find_element_by_tag_name("html").text
+                            ad_text = driver.find_element(by=By.TAG_NAME, value="html").text
                             ad_type = "image_and_text"
                         else:  # then it's an image ad
                             try:
-                                iframe = driver.find_element_by_tag_name("iframe")
+                                iframe = driver.find_element(by=By.TAG_NAME, value="iframe")
                                 iframe_url = iframe.get_attribute("src")
                                 driver.switch_to.frame(iframe)
                             except NoSuchElementException:
                                 pass
                             image_urls = [
                                 urljoin(iframe_url, img.get_attribute("src"))
-                                for img in driver.find_elements_by_tag_name("img")
+                                for img in driver.find_elements(by=By.TAG_NAME, value="img")
                             ]
                             image_url = None
                             try:
-                                destination = driver.find_element_by_tag_name(
+                                destination = driver.find_element(by=By.TAG_NAME, value=
                                     "a"
                                 ).get_attribute("href")
                             except NoSuchElementException as e:
@@ -378,7 +379,7 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
                     "took: {}".format((datetime.now() - start_time).total_seconds())
                 )
                 try:
-                    load_more_btn = driver.find_element_by_tag_name(
+                    load_more_btn = driver.find_element(by=By.TAG_NAME, value=
                         "button.ng-star-inserted"
                     )
                     load_more_btn.click()
