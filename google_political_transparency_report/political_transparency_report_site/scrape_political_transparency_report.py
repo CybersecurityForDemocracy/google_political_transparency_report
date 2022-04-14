@@ -388,10 +388,10 @@ def scrape_political_transparency_report(advertiser_id, start_date, end_date):
         except WebDriverException as e:
             logging.warning('%r', e)
             pass  # retry
-        finally:
-            driver.quit()
         else:
             return  # we're done if we didn't get a WebDriverException
+        finally:
+            driver.quit()
 
 
 def backfill_empty_advertisers(start_date, end_date):
